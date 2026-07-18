@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Subsonic Resonance",
+  "version": "0.1.0",
+  "identifier": "audio.resonance.subsonic",
+  "build": {
+    "beforeDevCommand": "trunk serve crates/ui/index.html",
+    "beforeBuildCommand": "trunk build crates/ui/index.html --release",
+    "devUrl": "http://localhost:8080",
+    "frontendDist": "../ui/dist"
+  },
+  "app": {
+    "windows": [{ "title": "Subsonic Resonance", "width": 1280, "height": 800, "minWidth": 900, "minHeight": 620 }],
+    "security": { "csp": null }
+  },
+  "bundle": { "active": true, "targets": ["nsis", "msi"], "icon": ["icons/icon.png", "icons/icon.ico"] }
+}

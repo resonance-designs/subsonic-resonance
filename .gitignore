@@ -1,0 +1,9 @@
+/target
+/dist
+crates/ui/dist
+crates/desktop/gen
+.env
+*.log
+.idea/
+.vscode/
+

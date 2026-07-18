@@ -1,0 +1,19 @@
+.cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+.cover img + span { display: none; }
+.real-feature > .cover { width: min(310px, 100%); justify-self: center; }
+.real-albums { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); }
+.library-state, .library-error, .empty-library { padding: 22px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); margin: 20px 0; }
+.library-error { border-color: #834c45; color: #e8b4aa; }
+.library-error p { margin: 6px 0 0; }
+.empty-library { min-height: 180px; display: grid; align-content: center; justify-items: center; text-align: center; }
+.empty-library h2 { font: italic 28px var(--serif); color: var(--cream); margin-bottom: 8px; }
+.real-player audio { width: min(560px, 100%); height: 42px; }
+.real-player .now, .real-player .now > div { min-width: 0; }
+.real-player .now b, .real-player .now span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.empty-source { font-size: 10px; color: var(--muted); padding: 10px; }
+.provider-list article > button:not(.remove) { border: 1px solid var(--line); background: transparent; padding: 8px 12px; }
+@media (max-width: 600px) {
+  .real-feature > .cover { width: min(230px, 68vw); }
+  .real-player audio { height: 34px; }
+  .real-albums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
