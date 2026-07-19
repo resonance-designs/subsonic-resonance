@@ -7,6 +7,8 @@ import ThemedImage from '@theme/ThemedImage';
 
 import styles from './index.module.css';
 
+const HERO_LOGO_SIZE = 305;
+
 export default function Home(): ReactNode {
   const {
     navbar: { logo }
@@ -28,8 +30,8 @@ export default function Home(): ReactNode {
                   className={styles.heroLogo}
                   sources={{ light: lightLogo, dark: darkLogo }}
                   alt="Subsonic Resonance logo"
-                  height={Number(logo?.height ?? 4267) / 14}
-                  width={Number(logo?.width ?? 4267) / 14}
+                  height={HERO_LOGO_SIZE}
+                  width={HERO_LOGO_SIZE}
                 />
                 <h1 className={`resonance-navbar-brand__wordmark ${styles.heroWordmark}`}>
                   <small className={`resonance-navbar-brand__subsonic ${styles.heroSubsonic}`}>
@@ -37,7 +39,7 @@ export default function Home(): ReactNode {
                       <span key={`${letter}-${index}`}>{letter}</span>
                     ))}
                   </small>
-                  <strong className={`resonance-navbar-brand__resonance ${styles.heroResonance}`} style={{ fontSize: '32px' }}>
+                  <strong className={`resonance-navbar-brand__resonance ${styles.heroResonance}`}>
                     {'Resonance'.split('').map((letter, index) => (
                       <span key={`${letter}-${index}`}>{letter}</span>
                     ))}

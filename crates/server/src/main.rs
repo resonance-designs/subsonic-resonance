@@ -9,8 +9,9 @@ use axum::{
     routing::{delete, get},
 };
 use resonance_core::{
-    AggregateResponse, Album, AlbumDetail, LibraryAlbum, LibraryAlbumDetail, LibraryTrack, MediaId,
-    MediaKind, MusicProvider, ProviderError, ProviderId, ProviderIssue, ProviderIssueKind, Track,
+    AggregateResponse, Album, AlbumDetail, Artist, LibraryAlbum, LibraryAlbumDetail, LibraryArtist,
+    LibraryPlaylist, LibraryPlaylistDetail, LibraryTrack, MediaId, MediaKind, MusicProvider,
+    Playlist, PlaylistDetail, ProviderError, ProviderId, ProviderIssue, ProviderIssueKind, Track,
 };
 use resonance_provider_subsonic::{Credentials, SubsonicClient};
 use serde::{Deserialize, Serialize};
@@ -87,10 +88,22 @@ async fn main() {
         )
         .route("/api/providers/{provider_id}", delete(remove_provider))
         .route("/api/providers/{provider_id}/status", get(status))
+        .route("/api/providers/{provider_id}/artists", get(artists))
+        .route("/api/providers/{provider_id}/playlists", get(playlists))
+        .route(
+            "/api/providers/{provider_id}/playlists/{playlist_id}",
+            get(playlist),
+        )
         .route("/api/providers/{provider_id}/albums", get(albums))
         .route("/api/providers/{provider_id}/albums/{album_id}", get(album))
         .route("/api/providers/{provider_id}/search", get(search))
         .route("/api/library/albums", get(library_albums))
+        .route("/api/library/artists", get(library_artists))
+        .route("/api/library/playlists", get(library_playlists))
+        .route(
+            "/api/library/playlists/{provider_id}/{playlist_id}",
+            get(library_playlist),
+        )
         .route(
             "/api/library/albums/{provider_id}/{album_id}",
             get(library_album),
@@ -280,6 +293,37 @@ async fn albums(
             .await?,
     ))
 }
+async fn artists(
+    State(state): State<AppState>,
+    Path(provider_id): Path<String>,
+    Query(q): Query<PageQuery>,
+) -> Result<Json<impl Serialize>, ApiError> {
+    Ok(Json(
+        provider(&state, &provider_id)
+            .await?
+            .artists(q.limit.unwrap_or(500), q.offset.unwrap_or(0))
+            .await?,
+    ))
+}
+async fn playlists(
+    State(state): State<AppState>,
+    Path(provider_id): Path<String>,
+) -> Result<Json<impl Serialize>, ApiError> {
+    Ok(Json(
+        provider(&state, &provider_id).await?.playlists().await?,
+    ))
+}
+async fn playlist(
+    State(state): State<AppState>,
+    Path((provider_id, playlist_id)): Path<(String, String)>,
+) -> Result<Json<impl Serialize>, ApiError> {
+    Ok(Json(
+        provider(&state, &provider_id)
+            .await?
+            .playlist(&playlist_id)
+            .await?,
+    ))
+}
 async fn album(
     State(state): State<AppState>,
     Path((provider_id, album_id)): Path<(String, String)>,
@@ -330,6 +374,32 @@ fn qualify_album(summary: &ProviderSummary, album: Album) -> LibraryAlbum {
         song_count: album.song_count,
         duration_seconds: album.duration_seconds,
         year: album.year,
+        source_name: summary.name.clone(),
+    }
+}
+
+fn qualify_artist(summary: &ProviderSummary, artist: Artist) -> LibraryArtist {
+    LibraryArtist {
+        id: qualified_id(&summary.id, MediaKind::Artist, artist.id),
+        name: artist.name,
+        album_count: artist.album_count,
+        cover_art: artist
+            .cover_art
+            .map(|id| qualified_id(&summary.id, MediaKind::Artwork, id)),
+        source_name: summary.name.clone(),
+    }
+}
+
+fn qualify_playlist(summary: &ProviderSummary, playlist: Playlist) -> LibraryPlaylist {
+    LibraryPlaylist {
+        id: qualified_id(&summary.id, MediaKind::Playlist, playlist.id),
+        name: playlist.name,
+        owner: playlist.owner,
+        song_count: playlist.song_count,
+        duration_seconds: playlist.duration_seconds,
+        cover_art: playlist
+            .cover_art
+            .map(|id| qualified_id(&summary.id, MediaKind::Artwork, id)),
         source_name: summary.name.clone(),
     }
 }
@@ -438,6 +508,118 @@ async fn library_albums(
         items,
         issues,
     })
+}
+
+async fn library_artists(
+    State(state): State<AppState>,
+    Query(q): Query<PageQuery>,
+) -> Json<AggregateResponse<LibraryArtist>> {
+    let limit = q.limit.unwrap_or(500).clamp(1, 500);
+    let offset = q.offset.unwrap_or(0);
+    let mut tasks = tokio::task::JoinSet::new();
+    for entry in provider_entries(&state).await {
+        tasks.spawn(async move {
+            let result = tokio::time::timeout(
+                PROVIDER_QUERY_TIMEOUT,
+                entry.client.artists(limit.saturating_add(offset), 0),
+            )
+            .await;
+            (entry.summary, result)
+        });
+    }
+
+    let mut items = Vec::new();
+    let mut issues = Vec::new();
+    while let Some(result) = tasks.join_next().await {
+        match result {
+            Ok((summary, Ok(Ok(artists)))) => items.extend(
+                artists
+                    .into_iter()
+                    .map(|artist| qualify_artist(&summary, artist)),
+            ),
+            Ok((summary, Ok(Err(error)))) => issues.push(provider_issue(&summary, error)),
+            Ok((summary, Err(_))) => issues.push(timeout_issue(&summary)),
+            Err(error) => tracing::warn!(%error, "library artist task failed"),
+        }
+    }
+    items.sort_by(|a, b| {
+        a.name
+            .to_lowercase()
+            .cmp(&b.name.to_lowercase())
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    items = items
+        .into_iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .collect();
+    issues.sort_by(|a, b| a.provider_id.cmp(&b.provider_id));
+    Json(AggregateResponse {
+        complete: issues.is_empty(),
+        items,
+        issues,
+    })
+}
+
+async fn library_playlists(
+    State(state): State<AppState>,
+) -> Json<AggregateResponse<LibraryPlaylist>> {
+    let mut tasks = tokio::task::JoinSet::new();
+    for entry in provider_entries(&state).await {
+        tasks.spawn(async move {
+            let result =
+                tokio::time::timeout(PROVIDER_QUERY_TIMEOUT, entry.client.playlists()).await;
+            (entry.summary, result)
+        });
+    }
+
+    let mut items = Vec::new();
+    let mut issues = Vec::new();
+    while let Some(result) = tasks.join_next().await {
+        match result {
+            Ok((summary, Ok(Ok(playlists)))) => items.extend(
+                playlists
+                    .into_iter()
+                    .map(|playlist| qualify_playlist(&summary, playlist)),
+            ),
+            Ok((summary, Ok(Err(error)))) => issues.push(provider_issue(&summary, error)),
+            Ok((summary, Err(_))) => issues.push(timeout_issue(&summary)),
+            Err(error) => tracing::warn!(%error, "library playlist task failed"),
+        }
+    }
+    items.sort_by(|a, b| {
+        a.name
+            .to_lowercase()
+            .cmp(&b.name.to_lowercase())
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    issues.sort_by(|a, b| a.provider_id.cmp(&b.provider_id));
+    Json(AggregateResponse {
+        complete: issues.is_empty(),
+        items,
+        issues,
+    })
+}
+
+async fn library_playlist(
+    State(state): State<AppState>,
+    Path((provider_id, playlist_id)): Path<(String, String)>,
+) -> Result<Json<LibraryPlaylistDetail>, ApiError> {
+    let entry = state
+        .providers
+        .read()
+        .await
+        .get(&provider_id)
+        .cloned()
+        .ok_or_else(|| ApiError(ProviderError::NotFound))?;
+    let PlaylistDetail { playlist, tracks } = entry.client.playlist(&playlist_id).await?;
+    Ok(Json(LibraryPlaylistDetail {
+        playlist: qualify_playlist(&entry.summary, playlist),
+        tracks: tracks
+            .into_iter()
+            .map(|track| qualify_track(&entry.summary, track))
+            .collect(),
+    }))
 }
 
 async fn library_album(

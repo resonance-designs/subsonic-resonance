@@ -4,10 +4,16 @@ use async_trait::async_trait;
 use md5::{Digest, Md5};
 use rand::{Rng, distr::Alphanumeric};
 use reqwest::Client;
-use resonance_core::{Album, AlbumDetail, MusicProvider, ProviderError, ProviderStatus, Track};
+use resonance_core::{
+    Album, AlbumDetail, Artist, MusicProvider, Playlist, PlaylistDetail, ProviderError,
+    ProviderStatus, Track,
+};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
-use std::{collections::HashSet, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 use url::Url;
 
 const API_VERSION: &str = "1.16.1";
@@ -182,8 +188,53 @@ impl MusicProvider for SubsonicClient {
         })
     }
 
+    async fn artists(&self, limit: u32, offset: u32) -> Result<Vec<Artist>, ProviderError> {
+        let modern: Result<ApiResult<ArtistsBody>, ProviderError> =
+            self.get("getArtists", &[]).await;
+        let mut artists = match modern {
+            Ok(response) => response
+                .body
+                .artists
+                .index
+                .into_iter()
+                .flat_map(|index| index.artist)
+                .map(Into::into)
+                .collect::<Vec<_>>(),
+            Err(error) if Self::missing_result(&error) => {
+                let mut derived = HashMap::<String, Artist>::new();
+                for album in self.albums(500, 0).await? {
+                    let Some(name) = album.artist else { continue };
+                    let id = album.artist_id.unwrap_or_else(|| format!("name:{name}"));
+                    let artist = derived.entry(id.clone()).or_insert_with(|| Artist {
+                        id,
+                        name,
+                        album_count: Some(0),
+                        cover_art: album.cover_art.clone(),
+                    });
+                    artist.album_count = Some(artist.album_count.unwrap_or(0).saturating_add(1));
+                    if artist.cover_art.is_none() {
+                        artist.cover_art = album.cover_art;
+                    }
+                }
+                derived.into_values().collect()
+            }
+            Err(error) => return Err(error),
+        };
+        artists.sort_by(|a, b| {
+            a.name
+                .to_lowercase()
+                .cmp(&b.name.to_lowercase())
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        Ok(artists
+            .into_iter()
+            .skip(offset as usize)
+            .take(limit.min(500) as usize)
+            .collect())
+    }
+
     async fn albums(&self, limit: u32, offset: u32) -> Result<Vec<Album>, ProviderError> {
-        const PAGE_SIZE: u32 = 30;
+        const PAGE_SIZE: u32 = 500;
         let target = limit.min(500);
         let mut items = Vec::new();
         let mut seen = HashSet::new();
@@ -266,6 +317,35 @@ impl MusicProvider for SubsonicClient {
         }
     }
 
+    async fn playlists(&self) -> Result<Vec<Playlist>, ProviderError> {
+        let response: ApiResult<PlaylistsBody> = self.get("getPlaylists", &[]).await?;
+        let mut playlists = response
+            .body
+            .playlists
+            .playlist
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<Playlist>>();
+        playlists.sort_by(|a, b| {
+            a.name
+                .to_lowercase()
+                .cmp(&b.name.to_lowercase())
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        Ok(playlists)
+    }
+
+    async fn playlist(&self, id: &str) -> Result<PlaylistDetail, ProviderError> {
+        let response: ApiResult<PlaylistBody> =
+            self.get("getPlaylist", &[("id", id.into())]).await?;
+        let playlist = response.body.playlist;
+        let tracks = playlist.entry.clone().into_iter().map(Into::into).collect();
+        Ok(PlaylistDetail {
+            playlist: playlist.into(),
+            tracks,
+        })
+    }
+
     async fn search(&self, query: &str, limit: u32) -> Result<Vec<Track>, ProviderError> {
         let response: ApiResult<SearchBody> = self
             .get(
@@ -325,6 +405,36 @@ struct ApiError {
 struct PingBody {}
 
 #[derive(Deserialize)]
+struct ArtistsBody {
+    artists: SubsonicArtists,
+}
+
+#[derive(Deserialize)]
+struct SubsonicArtists {
+    #[serde(default)]
+    index: Vec<ArtistIndex>,
+}
+
+#[derive(Deserialize)]
+struct ArtistIndex {
+    #[serde(default)]
+    artist: Vec<SubsonicArtist>,
+}
+
+#[derive(Deserialize)]
+struct SubsonicArtist {
+    #[serde(deserialize_with = "string_from_any")]
+    id: String,
+    name: String,
+    #[serde(rename = "albumCount")]
+    #[serde(default, deserialize_with = "option_u32_from_any")]
+    album_count: Option<u32>,
+    #[serde(rename = "coverArt")]
+    #[serde(default, deserialize_with = "option_string_from_any")]
+    cover_art: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct AlbumListBody {
     #[serde(rename = "albumList2")]
     album_list: AlbumList,
@@ -365,6 +475,40 @@ struct SubsonicAlbum {
 #[derive(Deserialize)]
 struct AlbumBody {
     album: SubsonicAlbum,
+}
+
+#[derive(Deserialize)]
+struct PlaylistsBody {
+    playlists: PlaylistCollection,
+}
+
+#[derive(Deserialize)]
+struct PlaylistCollection {
+    #[serde(default)]
+    playlist: Vec<SubsonicPlaylist>,
+}
+
+#[derive(Deserialize)]
+struct PlaylistBody {
+    playlist: SubsonicPlaylist,
+}
+
+#[derive(Clone, Deserialize)]
+struct SubsonicPlaylist {
+    #[serde(deserialize_with = "string_from_any")]
+    id: String,
+    name: String,
+    owner: Option<String>,
+    #[serde(rename = "songCount")]
+    #[serde(default, deserialize_with = "option_u32_from_any")]
+    song_count: Option<u32>,
+    #[serde(default, deserialize_with = "option_u64_from_any")]
+    duration: Option<u64>,
+    #[serde(rename = "coverArt")]
+    #[serde(default, deserialize_with = "option_string_from_any")]
+    cover_art: Option<String>,
+    #[serde(default)]
+    entry: Vec<SubsonicTrack>,
 }
 #[derive(Deserialize)]
 struct SearchBody {
@@ -492,6 +636,28 @@ impl From<SubsonicAlbum> for Album {
         }
     }
 }
+impl From<SubsonicArtist> for Artist {
+    fn from(artist: SubsonicArtist) -> Self {
+        Self {
+            id: artist.id,
+            name: artist.name,
+            album_count: artist.album_count,
+            cover_art: artist.cover_art,
+        }
+    }
+}
+impl From<SubsonicPlaylist> for Playlist {
+    fn from(playlist: SubsonicPlaylist) -> Self {
+        Self {
+            id: playlist.id,
+            name: playlist.name,
+            owner: playlist.owner,
+            song_count: playlist.song_count,
+            duration_seconds: playlist.duration,
+            cover_art: playlist.cover_art,
+        }
+    }
+}
 impl From<SubsonicTrack> for Track {
     fn from(t: SubsonicTrack) -> Self {
         Self {
@@ -575,5 +741,23 @@ mod tests {
         ).unwrap();
         assert_eq!(directory.directory.id, "456");
         assert_eq!(directory.directory.child[0].duration, Some(180));
+
+        let artists: ArtistsBody = serde_json::from_str(
+            r#"{"artists":{"ignoredArticles":"The El La Los Las Le Les","index":[{"name":"A","artist":[{"id":42,"name":"Artist One","albumCount":"3","coverArt":99}]}]}}"#,
+        )
+        .unwrap();
+        let artist = &artists.artists.index[0].artist[0];
+        assert_eq!(artist.id, "42");
+        assert_eq!(artist.album_count, Some(3));
+        assert_eq!(artist.cover_art.as_deref(), Some("99"));
+
+        let playlist: PlaylistBody = serde_json::from_str(
+            r#"{"playlist":{"id":7,"name":"Favorites","owner":"listener","songCount":"1","duration":"180","coverArt":88,"entry":[{"id":9,"title":"Track One","duration":"180"}]}}"#,
+        )
+        .unwrap();
+        assert_eq!(playlist.playlist.id, "7");
+        assert_eq!(playlist.playlist.song_count, Some(1));
+        assert_eq!(playlist.playlist.cover_art.as_deref(), Some("88"));
+        assert_eq!(playlist.playlist.entry[0].id, "9");
     }
 }

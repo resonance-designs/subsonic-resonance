@@ -13,6 +13,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-19
+
+### Added
+
+- Added provider-neutral artist retrieval, OpenSubsonic `getArtists` decoding, an album-derived compatibility fallback, and provider-qualified unified artist API responses with timeout and partial-failure handling.
+- Added a live unified Artists page with filtering, album-count sorting, provider attribution, responsive artwork cards, and loading, empty, and error states.
+- Added provider-neutral playlist summaries and details, OpenSubsonic `getPlaylists`/`getPlaylist` decoding, and provider-qualified unified playlist API responses with timeout and partial-failure handling.
+- Added a live read-only Playlists page with filtering, source attribution, playlist artwork and metadata, track loading, and shared-queue playback.
+- Added provider-ID source filters to Albums, Artists, Playlists, and Search so users can narrow a view without disabling any configured connection.
+- Added session playback controls for randomized queue order, repeating the current track, and repeating the complete album, playlist, or search queue.
+
+### Changed
+
+- Increased Subsonic album discovery requests from 30 to 500 items per page, matching the API maximum while preserving bounded pagination, album-ID deduplication, and repeated-page termination safeguards.
+- Replaced documentation hero logo scaling based on raw asset dimensions with an explicit 305-pixel display size while retaining configured light and dark logo source fallbacks.
+- Removed the documentation hero wordmark's fixed pixel-size override so its dedicated responsive `rem`/viewport `clamp()` sizing remains independent from the navbar branding.
+- Reorganized the implementation tracker so theme customization and library-experience progress appear together under the 0.2 roadmap.
+
+### Fixed
+
+- Reused the shared album-track loader during unified library refreshes and reset the current track index whenever the selected album's tracks are replaced or cleared.
+- Explicitly configured Trunk to emit shared UI image assets beneath `/img`, keeping copied logos compatible with the application navigation paths.
+- Prevented overlapping album-track and search requests from allowing stale responses to overwrite newer UI state.
+
 ## [0.1.2] - 2026-07-19
 
 ### Added

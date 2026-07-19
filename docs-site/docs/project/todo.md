@@ -9,11 +9,41 @@ sidebar_position: 3
 
 This file tracks implementation work that is planned but not yet complete. Keep items narrowly scoped, mark them complete only after validation, and move release-worthy changes into `CHANGELOG.md`.
 
-## Theme and interface customization
+## 0.2 roadmap
 
-Target: `0.2`
+### Library experience
 
-### 1. Theme foundation
+- [x] Replace global active-provider state with an enabled-provider registry and unified-library query service.
+- [x] Query enabled providers concurrently with per-provider timeouts, partial results, and source-specific error reporting.
+- [x] Add optional source filters without hiding or disabling the other configured providers globally.
+- [x] Introduce provider-qualified `MediaId` values for the implemented track, album, artist, playlist, artwork, and route flows; favorites, persistent queues, and caches will adopt them as those features are added.
+- [x] Define deterministic merge, sort, and pagination behavior for current album and track results arriving from multiple providers; cross-provider metadata deduplication remains future work.
+- [x] Update Home, Albums, Search, and player state to consume aggregated results while showing each item's source.
+- [x] Update Artists to consume aggregated results after adding the required provider contract and API endpoints.
+- [ ] Allow playlists and queues to contain provider-qualified tracks from different remote and local providers.
+- [ ] Persist mixed-source playlists without embedding credentials or unstable stream URLs.
+- [ ] Handle a missing, offline, removed, or unauthorized provider at item level so the rest of a mixed playlist remains usable.
+- [ ] Add integration tests covering duplicate remote IDs, concurrent provider failures, mixed-source ordering, and partial playback availability.
+- [ ] Implement a local-filesystem `MusicProvider` adapter.
+- [ ] Add desktop folder selection, permission handling, multiple library roots, and removable/network-volume behavior.
+- [ ] Index WAV, MP3, FLAC, AAC/M4A, Ogg Vorbis, and Opus, with an extensible format capability table.
+- [ ] Extract tags, embedded artwork, duration, codec, bitrate, sample rate, disc/track numbers, and ReplayGain metadata.
+- [ ] Define stable local track identities that survive metadata changes and file moves when possible.
+- [ ] Add incremental filesystem watching, manual rescans, cancellation, progress reporting, and recovery after interrupted scans.
+- [ ] Keep indexing read-only and document symlink, hidden-file, permission, and unsupported/corrupt-file behavior.
+- [ ] Add local artwork and audio serving that prevents path traversal and exposes only indexed files.
+- [ ] Test large libraries, Unicode paths, long Windows paths, duplicate files, cue sheets, multi-disc albums, and malformed tags.
+- [x] Complete the first live Albums and dedicated Search page slice.
+- [x] Complete the first read-only Playlists page using provider-qualified server playlists and tracks; mixed-source creation and persistence remain future work.
+- [ ] Persist providers securely using the operating-system credential vault.
+- [ ] Integrate the Rust backend lifecycle into the Tauri desktop application.
+- [x] Add session playback modes for randomized order, repeat-current, and repeat-queue behavior.
+- [ ] **0.1.4:** Add persistent queue controls, native media controls, and playback restoration.
+- [ ] Add provider editing, offline caching, downloads, and per-provider transcoding settings.
+
+### Theme and interface customization
+
+#### 1. Theme foundation
 
 - [ ] Inventory every hard-coded UI color, font, radius, shadow, spacing value, and component state in `crates/ui/styles.css` and `crates/ui/live.css`.
 - [ ] Define semantic CSS custom properties instead of component-specific color names. Initial tokens should cover:
@@ -29,7 +59,7 @@ Target: `0.2`
 - [ ] Define a stable developer-facing theme format and document required, optional, and fallback values.
 - [ ] Reject unknown or invalid token values safely instead of injecting arbitrary CSS text.
 
-### 2. Built-in appearance modes
+#### 2. Built-in appearance modes
 
 - [ ] Add built-in Dark and Light theme definitions with equivalent semantic coverage.
 - [ ] Add a System mode that follows `prefers-color-scheme` and reacts when the operating-system preference changes.
@@ -37,7 +67,7 @@ Target: `0.2`
 - [ ] Apply the saved theme before the main UI paints to prevent a light/dark flash.
 - [ ] Preserve the existing reduced-motion behavior across every theme.
 
-### 3. Settings → Interface
+#### 3. Settings → Interface
 
 - [ ] Add an `Interface` tab beside General and Connections.
 - [ ] Add appearance selection for System, Dark, and Light.
@@ -54,7 +84,7 @@ Target: `0.2`
 - [ ] Warn when a chosen foreground/background combination fails the project contrast threshold.
 - [ ] Make all controls keyboard accessible and usable at mobile widths.
 
-### 4. Typography customization
+#### 4. Typography customization
 
 - [ ] Define curated, cross-platform font stacks that work without network access.
 - [ ] Add independent selectors for interface/body, headings, metadata, and player typography.
@@ -64,7 +94,7 @@ Target: `0.2`
 - [ ] Document how developers can bundle and register another font while respecting its license.
 - [ ] Do not fetch fonts from third-party CDNs by default.
 
-### 5. Custom logo
+#### 5. Custom logo
 
 - [ ] Add a logo selector with preview, replace, and reset actions.
 - [ ] Accept only supported local image types such as PNG, WebP, JPEG, and SVG after explicit sanitization.
@@ -74,7 +104,7 @@ Target: `0.2`
 - [ ] Store browser logo data in IndexedDB rather than `localStorage`; use application-managed storage for desktop builds.
 - [ ] Treat SVG as untrusted input and sanitize it or rasterize it before display.
 
-### 6. Persistence and import/export
+#### 6. Persistence and import/export
 
 - [ ] Persist theme preferences separately from provider credentials.
 - [ ] Version stored preferences and define migrations for future token changes.
@@ -83,7 +113,7 @@ Target: `0.2`
 - [ ] Validate imported themes before persisting or applying them.
 - [ ] Recover automatically to the built-in theme when stored data is corrupt or incomplete.
 
-### 7. Developer customization
+#### 7. Developer customization
 
 - [ ] Add a theme-authoring document with token reference, examples, screenshots, and validation commands.
 - [ ] Provide a complete example third-party theme without duplicating component CSS.
@@ -91,7 +121,7 @@ Target: `0.2`
 - [ ] Add a development-only theme inspector or token preview page.
 - [ ] Document compatibility guarantees and deprecation rules for theme schema versions.
 
-### 8. Quality gates
+#### 8. Quality gates
 
 - [ ] Add unit tests for theme serialization, validation, defaults, migration, and corrupt-data recovery.
 - [ ] Add browser tests for switching modes, refreshing, System mode changes, reset behavior, and import/export.
@@ -100,7 +130,7 @@ Target: `0.2`
 - [ ] Confirm custom values cannot inject styles, URLs, markup, or scripts.
 - [ ] Confirm provider switching, dialogs, artwork, errors, and native audio controls remain legible in every built-in theme.
 
-### Definition of done
+#### Theme definition of done
 
 - [ ] Users can select System, Dark, or Light and see the choice persist without a flash on reload.
 - [ ] Users can customize documented color and typography roles from Settings → Interface.
@@ -108,32 +138,3 @@ Target: `0.2`
 - [ ] Users can set and remove a validated custom logo.
 - [ ] Developers can add a compatible theme using documented tokens and a versioned theme definition.
 - [ ] Built-in themes pass responsive, keyboard, reduced-motion, and contrast checks.
-
-## Existing roadmap follow-up
-
-- [x] Replace global active-provider state with an enabled-provider registry and unified-library query service.
-- [x] Query enabled providers concurrently with per-provider timeouts, partial results, and source-specific error reporting.
-- [ ] Add optional source filters without hiding or disabling the other configured providers globally.
-- [ ] Introduce a provider-qualified `MediaId` used by tracks, albums, artists, favorites, queues, playlists, caches, and routes.
-- [x] Define deterministic merge, sort, and pagination behavior for current album and track results arriving from multiple providers; cross-provider metadata deduplication remains future work.
-- [x] Update Home, Albums, Search, and player state to consume aggregated results while showing each item's source.
-- [ ] Update Artists to consume aggregated results after adding the required provider contract and API endpoints.
-- [ ] Allow playlists and queues to contain provider-qualified tracks from different remote and local providers.
-- [ ] Persist mixed-source playlists without embedding credentials or unstable stream URLs.
-- [ ] Handle a missing, offline, removed, or unauthorized provider at item level so the rest of a mixed playlist remains usable.
-- [ ] Add integration tests covering duplicate remote IDs, concurrent provider failures, mixed-source ordering, and partial playback availability.
-- [ ] Implement a local-filesystem `MusicProvider` adapter.
-- [ ] Add desktop folder selection, permission handling, multiple library roots, and removable/network-volume behavior.
-- [ ] Index WAV, MP3, FLAC, AAC/M4A, Ogg Vorbis, and Opus, with an extensible format capability table.
-- [ ] Extract tags, embedded artwork, duration, codec, bitrate, sample rate, disc/track numbers, and ReplayGain metadata.
-- [ ] Define stable local track identities that survive metadata changes and file moves when possible.
-- [ ] Add incremental filesystem watching, manual rescans, cancellation, progress reporting, and recovery after interrupted scans.
-- [ ] Keep indexing read-only and document symlink, hidden-file, permission, and unsupported/corrupt-file behavior.
-- [ ] Add local artwork and audio serving that prevents path traversal and exposes only indexed files.
-- [ ] Test large libraries, Unicode paths, long Windows paths, duplicate files, cue sheets, multi-disc albums, and malformed tags.
-- [x] Complete the first live Albums and dedicated Search page slice.
-- [ ] Complete Artists and Playlists pages.
-- [ ] Persist providers securely using the operating-system credential vault.
-- [ ] Integrate the Rust backend lifecycle into the Tauri desktop application.
-- [ ] Add a persistent playback queue, native media controls, and playback restoration.
-- [ ] Add provider editing, offline caching, downloads, and per-provider transcoding settings.

@@ -109,6 +109,35 @@ pub struct LibraryAlbum {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Playlist {
+    pub id: String,
+    pub name: String,
+    pub owner: Option<String>,
+    pub song_count: Option<u32>,
+    pub duration_seconds: Option<u64>,
+    pub cover_art: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistDetail {
+    #[serde(flatten)]
+    pub playlist: Playlist,
+    pub tracks: Vec<Track>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryArtist {
+    pub id: MediaId,
+    pub name: String,
+    pub album_count: Option<u32>,
+    pub cover_art: Option<MediaId>,
+    pub source_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LibraryTrack {
     pub id: MediaId,
     pub title: String,
@@ -127,6 +156,25 @@ pub struct LibraryTrack {
 #[serde(rename_all = "camelCase")]
 pub struct LibraryAlbumDetail {
     pub album: LibraryAlbum,
+    pub tracks: Vec<LibraryTrack>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryPlaylist {
+    pub id: MediaId,
+    pub name: String,
+    pub owner: Option<String>,
+    pub song_count: Option<u32>,
+    pub duration_seconds: Option<u64>,
+    pub cover_art: Option<MediaId>,
+    pub source_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryPlaylistDetail {
+    pub playlist: LibraryPlaylist,
     pub tracks: Vec<LibraryTrack>,
 }
 
@@ -186,8 +234,11 @@ pub enum ProviderError {
 #[async_trait]
 pub trait MusicProvider: Send + Sync {
     async fn ping(&self) -> Result<ProviderStatus, ProviderError>;
+    async fn artists(&self, limit: u32, offset: u32) -> Result<Vec<Artist>, ProviderError>;
     async fn albums(&self, limit: u32, offset: u32) -> Result<Vec<Album>, ProviderError>;
     async fn album(&self, id: &str) -> Result<AlbumDetail, ProviderError>;
+    async fn playlists(&self) -> Result<Vec<Playlist>, ProviderError>;
+    async fn playlist(&self, id: &str) -> Result<PlaylistDetail, ProviderError>;
     async fn search(&self, query: &str, limit: u32) -> Result<Vec<Track>, ProviderError>;
     fn stream_url(&self, track_id: &str) -> Result<String, ProviderError>;
     fn cover_art_url(&self, cover_art_id: &str, size: Option<u32>)
