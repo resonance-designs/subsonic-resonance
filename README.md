@@ -1,11 +1,11 @@
 # Subsonic Resonance
 
-![Static Badge](https://img.shields.io/badge/Version-0.1.1-orange)
+![Static Badge](https://img.shields.io/badge/Version-0.1.2-orange)
 ![Static Badge](https://img.shields.io/badge/Latest_Release-v0.1.1-green)
 
 Subsonic Resonance is a Windows-first, cross-platform OpenSubsonic streaming client written in Rust. It uses a shared Leptos/WebAssembly interface for the browser and Tauri desktop shell, with provider integrations behind a provider-neutral Rust API.
 
-The project is currently at `0.1.1` and under active development toward the `0.2.0` library-experience release.
+The project is currently at `0.1.2` and under active development toward the `0.2.0` library-experience release.
 
 ## Current functionality
 
@@ -15,13 +15,16 @@ The project is currently at `0.1.1` and under active development toward the `0.2
 - Verify new connections with `ping` before registering them.
 - Query every connected provider concurrently as one unified library.
 - Browse albums from all available providers without selecting a globally active connection.
-- Load provider-qualified album tracks and search every connected library from Home.
+- Retrieve successive provider album pages instead of limiting each collection to its first 30 entries.
+- Filter and sort the dedicated Albums page by title, artist, year, and source.
+- Search every connected library from the dedicated Search page.
+- Load provider-qualified album tracks and play results from Home, Albums, or Search.
 - Continue displaying successful sources when another provider is offline, unauthorized, invalid, or times out.
 - Proxy cover artwork and audio without exposing credentials to the browser.
 - Stream audio through the browser with byte-range support for seeking.
 - Run the same Leptos UI in a browser or Tauri 2 desktop shell.
 
-The Albums, Artists, Playlists, and dedicated Search pages are placeholders. Unified album browsing and search currently operate from Home.
+The Artists and Playlists pages remain placeholders. Home, Albums, and Search use the unified library service.
 
 ## Architecture
 
@@ -34,15 +37,15 @@ The Albums, Artists, Playlists, and dedicated Search pages are placeholders. Uni
 | `resonance-desktop`           | Tauri 2 Windows/desktop shell.                                                  |
 
 ```text
-Browser / Tauri UI
-        │
-        ▼
+      Browser / Tauri UI
+              │
+              ▼
 Axum API and provider registry
-        │
-        ▼
-MusicProvider trait
-        │
-        ▼
+              │
+              ▼
+      MusicProvider trait
+              │
+              ▼
 OpenSubsonic / Subsonic server
 ```
 
@@ -175,6 +178,8 @@ The Bash script can also be invoked directly with `bash scripts/build-and-run.sh
 
 The Docusaurus project in `docs-site` generates project documentation from this README, `TODO.md`, `CHANGELOG.md`, and `LICENSING.md`.
 
+The site uses the same dark application palette and Subsonic/Resonance brand lockup as the client. Its responsive landing-page hero pairs the project identity and primary documentation links with a current Albums-library screenshot, and the global footer links to project documentation, development resources, releases, and licensing guidance. The Docusaurus light/dark toggle and template theme selector are disabled so the published site consistently uses the Resonance theme.
+
 Install the Node dependencies once:
 
 ```powershell
@@ -204,7 +209,7 @@ AI mode requires the optional Codex CLI prerequisite. Run `codex login` if it is
 
 The generated report distinguishes automated evidence from the manual keyboard, screen-reader, workflow, and other human review required to establish WCAG 2.2 AA conformance. For another target, use `node scripts/run-lighthouse.js <url> --label <name>` for offline mode or append `--ai` for AI mode.
 
-Use `npm run version:sync -- 0.1.1` to synchronize an explicit project version across Cargo, Node, and documentation metadata. Without an argument, the script uses the current Cargo workspace version.
+Use `npm run version:sync -- 0.1.2` to synchronize an explicit project version across Cargo, Node, and documentation metadata. Without an argument, the script uses the current Cargo workspace version.
 
 ## Release automation
 
@@ -233,13 +238,10 @@ The release command reads the Cargo workspace version, confirms all Cargo, Node,
 - Support a custom application logo with validation, preview, reset, and a safe built-in fallback.
 - Publish a documented theme definition format so contributors can add themes without rewriting components.
 - Persist and restore interface preferences before first paint to avoid theme flashes.
-- Replace the single active-provider model with a unified library that queries every enabled connection concurrently.
-- Keep every configured server available throughout the app, with optional source filters instead of a globally active connection.
-- Use provider-qualified media identities so albums, tracks, queues, favorites, and cached data cannot collide across sources.
 - Allow playlists and the playback queue to mix tracks from multiple Subsonic servers, Bandcamp, and future local-library providers.
 - Preserve each playlist item's source identity and report unavailable sources without discarding the rest of the playlist.
-- Complete Albums, Artists, Playlists, and Search pages using live provider data.
-- Add album detail views, pagination, sorting, filtering, and provider-aware navigation.
+- Complete Artists and Playlists pages using the existing unified provider data; Albums and Search are already live.
+- Add full album-detail navigation and user-facing pagination while retaining the existing album sorting, filtering, provider attribution, and paged provider discovery.
 - Build a persistent playback queue with previous/next behavior and proper playback state.
 - Add favorites, scrobbling, play-queue restoration, and server capability detection.
 - Improve loading, empty, offline, authentication-expired, and partial-failure states.
@@ -273,7 +275,7 @@ The release command reads the Cargo workspace version, confirms all Cargo, Node,
 ## Known limitations
 
 - UI-added providers are memory-only and must be re-added after a backend restart.
-- Only the Home view is connected to live library data.
+- Artists and Playlists remain placeholders; Home, Albums, and Search are connected to live unified-library data.
 - The desktop shell depends on a separately running backend today.
 - The browser API base is currently fixed to `http://127.0.0.1:3000/api`.
 - Provider registration accepts local-network URLs by design; the backend should not be exposed to untrusted networks in its current form.

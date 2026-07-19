@@ -81,9 +81,40 @@ const config: Config = {
         }
       ]
     },
+    footer: {
+      style: 'dark',
+      links: [
+        {
+          title: 'Project',
+          items: [
+            { label: 'Documentation', to: '/docs/intro' },
+            { label: 'Roadmap', to: '/docs/project/roadmap' },
+            { label: 'Changelog', to: '/docs/releases/changelog' }
+          ]
+        },
+        {
+          title: 'Development',
+          items: [
+            {
+              label: 'GitHub repository',
+              href: 'https://github.com/resonance-designs/subsonic-resonance'
+            },
+            {
+              label: 'Releases',
+              href: 'https://github.com/resonance-designs/subsonic-resonance/releases'
+            }
+          ]
+        },
+        {
+          title: 'Legal',
+          items: [{ label: 'Licensing guide', to: '/docs/project/licensing' }]
+        }
+      ],
+      copyright: `<span class="resonance-footer__description">A unified streaming client for OpenSubsonic and other music sources.</span><span class="resonance-footer__copyright">Copyright © ${new Date().getFullYear()} Resonance Designs.</span>`
+    },
     colorMode: {
       defaultMode: 'dark',
-      disableSwitch: false,
+      disableSwitch: true,
       respectPrefersColorScheme: false
     },
     prism: {

@@ -7,7 +7,7 @@ use reqwest::Client;
 use resonance_core::{Album, AlbumDetail, MusicProvider, ProviderError, ProviderStatus, Track};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 use url::Url;
 
 const API_VERSION: &str = "1.16.1";
@@ -149,23 +149,11 @@ impl SubsonicClient {
     fn missing_result(error: &ProviderError) -> bool {
         matches!(error, ProviderError::InvalidResponse(message) if message.contains("missing field") || message.contains("did not contain its result"))
     }
-}
 
-#[async_trait]
-impl MusicProvider for SubsonicClient {
-    async fn ping(&self) -> Result<ProviderStatus, ProviderError> {
-        let response: ApiResult<PingBody> = self.get("ping", &[]).await?;
-        Ok(ProviderStatus {
-            server_version: response.version,
-            provider: response.server_type.unwrap_or_else(|| "Subsonic".into()),
-            open_subsonic: response.open_subsonic.unwrap_or(false),
-        })
-    }
-
-    async fn albums(&self, limit: u32, offset: u32) -> Result<Vec<Album>, ProviderError> {
+    async fn album_page(&self, size: u32, offset: u32) -> Result<Vec<Album>, ProviderError> {
         let arguments = [
             ("type", "newest".into()),
-            ("size", limit.min(500).to_string()),
+            ("size", size.to_string()),
             ("offset", offset.to_string()),
         ];
         let modern: Result<ApiResult<AlbumListBody>, ProviderError> =
@@ -180,6 +168,51 @@ impl MusicProvider for SubsonicClient {
             Err(error) => return Err(error),
         };
         Ok(items.into_iter().map(Into::into).collect())
+    }
+}
+
+#[async_trait]
+impl MusicProvider for SubsonicClient {
+    async fn ping(&self) -> Result<ProviderStatus, ProviderError> {
+        let response: ApiResult<PingBody> = self.get("ping", &[]).await?;
+        Ok(ProviderStatus {
+            server_version: response.version,
+            provider: response.server_type.unwrap_or_else(|| "Subsonic".into()),
+            open_subsonic: response.open_subsonic.unwrap_or(false),
+        })
+    }
+
+    async fn albums(&self, limit: u32, offset: u32) -> Result<Vec<Album>, ProviderError> {
+        const PAGE_SIZE: u32 = 30;
+        let target = limit.min(500);
+        let mut items = Vec::new();
+        let mut seen = HashSet::new();
+        let mut page_offset = offset;
+
+        while (items.len() as u32) < target {
+            let request_size = PAGE_SIZE.min(target.saturating_sub(items.len() as u32));
+            let page = self.album_page(request_size, page_offset).await?;
+            if page.is_empty() {
+                break;
+            }
+
+            let mut added = 0usize;
+            for album in page {
+                if seen.insert(album.id.clone()) {
+                    items.push(album);
+                    added += 1;
+                }
+            }
+
+            // Some partial implementations ignore offset and repeat the first page.
+            if added == 0 {
+                break;
+            }
+            page_offset = page_offset.saturating_add(request_size);
+        }
+
+        items.truncate(target as usize);
+        Ok(items)
     }
 
     async fn album(&self, id: &str) -> Result<AlbumDetail, ProviderError> {

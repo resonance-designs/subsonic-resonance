@@ -16,13 +16,10 @@ sidebar_position: 2
 - Support a custom application logo with validation, preview, reset, and a safe built-in fallback.
 - Publish a documented theme definition format so contributors can add themes without rewriting components.
 - Persist and restore interface preferences before first paint to avoid theme flashes.
-- Replace the single active-provider model with a unified library that queries every enabled connection concurrently.
-- Keep every configured server available throughout the app, with optional source filters instead of a globally active connection.
-- Use provider-qualified media identities so albums, tracks, queues, favorites, and cached data cannot collide across sources.
 - Allow playlists and the playback queue to mix tracks from multiple Subsonic servers, Bandcamp, and future local-library providers.
 - Preserve each playlist item's source identity and report unavailable sources without discarding the rest of the playlist.
-- Complete Albums, Artists, Playlists, and Search pages using live provider data.
-- Add album detail views, pagination, sorting, filtering, and provider-aware navigation.
+- Complete Artists and Playlists pages using the existing unified provider data; Albums and Search are already live.
+- Add full album-detail navigation and user-facing pagination while retaining the existing album sorting, filtering, provider attribution, and paged provider discovery.
 - Build a persistent playback queue with previous/next behavior and proper playback state.
 - Add favorites, scrobbling, play-queue restoration, and server capability detection.
 - Improve loading, empty, offline, authentication-expired, and partial-failure states.

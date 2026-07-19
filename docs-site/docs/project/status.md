@@ -15,13 +15,16 @@ sidebar_position: 1
 - Verify new connections with `ping` before registering them.
 - Query every connected provider concurrently as one unified library.
 - Browse albums from all available providers without selecting a globally active connection.
-- Load provider-qualified album tracks and search every connected library from Home.
+- Retrieve successive provider album pages instead of limiting each collection to its first 30 entries.
+- Filter and sort the dedicated Albums page by title, artist, year, and source.
+- Search every connected library from the dedicated Search page.
+- Load provider-qualified album tracks and play results from Home, Albums, or Search.
 - Continue displaying successful sources when another provider is offline, unauthorized, invalid, or times out.
 - Proxy cover artwork and audio without exposing credentials to the browser.
 - Stream audio through the browser with byte-range support for seeking.
 - Run the same Leptos UI in a browser or Tauri 2 desktop shell.
 
-The Albums, Artists, Playlists, and dedicated Search pages are placeholders. Unified album browsing and search currently operate from Home.
+The Artists and Playlists pages remain placeholders. Home, Albums, and Search use the unified library service.
 
 ## Security and persistence
 
@@ -36,7 +39,7 @@ Durable secrets should eventually be stored through the operating-system credent
 ## Known limitations
 
 - UI-added providers are memory-only and must be re-added after a backend restart.
-- Only the Home view is connected to live library data.
+- Artists and Playlists remain placeholders; Home, Albums, and Search are connected to live unified-library data.
 - The desktop shell depends on a separately running backend today.
 - The browser API base is currently fixed to `http://127.0.0.1:3000/api`.
 - Provider registration accepts local-network URLs by design; the backend should not be exposed to untrusted networks in its current form.

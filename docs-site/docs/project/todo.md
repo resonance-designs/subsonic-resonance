@@ -111,12 +111,13 @@ Target: `0.2`
 
 ## Existing roadmap follow-up
 
-- [ ] Replace global active-provider state with an enabled-provider registry and unified-library query service.
-- [ ] Query enabled providers concurrently with per-provider timeouts, partial results, and source-specific error reporting.
+- [x] Replace global active-provider state with an enabled-provider registry and unified-library query service.
+- [x] Query enabled providers concurrently with per-provider timeouts, partial results, and source-specific error reporting.
 - [ ] Add optional source filters without hiding or disabling the other configured providers globally.
 - [ ] Introduce a provider-qualified `MediaId` used by tracks, albums, artists, favorites, queues, playlists, caches, and routes.
-- [ ] Define deterministic merge, sort, deduplication, and pagination behavior for results arriving from multiple providers.
-- [ ] Update Home, Albums, Artists, Search, and player state to consume aggregated results while showing each item's source.
+- [x] Define deterministic merge, sort, and pagination behavior for current album and track results arriving from multiple providers; cross-provider metadata deduplication remains future work.
+- [x] Update Home, Albums, Search, and player state to consume aggregated results while showing each item's source.
+- [ ] Update Artists to consume aggregated results after adding the required provider contract and API endpoints.
 - [ ] Allow playlists and queues to contain provider-qualified tracks from different remote and local providers.
 - [ ] Persist mixed-source playlists without embedding credentials or unstable stream URLs.
 - [ ] Handle a missing, offline, removed, or unauthorized provider at item level so the rest of a mixed playlist remains usable.
@@ -130,7 +131,8 @@ Target: `0.2`
 - [ ] Keep indexing read-only and document symlink, hidden-file, permission, and unsupported/corrupt-file behavior.
 - [ ] Add local artwork and audio serving that prevents path traversal and exposes only indexed files.
 - [ ] Test large libraries, Unicode paths, long Windows paths, duplicate files, cue sheets, multi-disc albums, and malformed tags.
-- [ ] Complete Albums, Artists, Playlists, and dedicated Search pages.
+- [x] Complete the first live Albums and dedicated Search page slice.
+- [ ] Complete Artists and Playlists pages.
 - [ ] Persist providers securely using the operating-system credential vault.
 - [ ] Integrate the Rust backend lifecycle into the Tauri desktop application.
 - [ ] Add a persistent playback queue, native media controls, and playback restoration.

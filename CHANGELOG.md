@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-19
+
+### Added
+
+- Added a dedicated unified Albums page with title, artist, and source filtering; title, artist, year, and source sorting; provider attribution; album selection; and shared playback.
+- Added a dedicated unified Search page that queries every connected provider, reports partial provider failures, preserves provider-qualified results, and promotes selected results into the shared playback queue.
+- Added responsive album grids, library toolbars, search states, empty results, selection states, and accessible form labels for the new library pages.
+- Added a responsive two-column documentation landing-page hero with the Subsonic Resonance identity, primary documentation actions, and an application Albums-library preview.
+- Added a global documentation footer linking project documentation, development resources, releases, and licensing guidance.
+
+### Changed
+
+- Changed the Albums and Search navigation destinations from placeholders to live unified-library experiences.
+- Reused the shared player across Home, Albums, and Search while retaining the source identity required for credential-safe streaming.
+- Replaced the application and documentation placeholder marks with the shared Subsonic Resonance logo, matched their two-line Subsonic/Resonance brand lockups, and aligned the documentation palette, Resonance wordmark, and primary navigation accents with the application colors.
+- Disabled the documentation light/dark and template-theme selectors so the site consistently presents the application-aligned Resonance theme.
+- Updated the documentation homepage and global navigation/footer styling for responsive desktop and mobile layouts, semantic heading structure, visible focus handling, and accessible image descriptions.
+
+### Fixed
+
+- Fixed album discovery stopping after the first 30-item request by paging Subsonic and Bandcamp-compatible album-list endpoints, detecting repeated pages from servers that ignore offsets, and loading the complete supported unified batch in the UI.
+
+### Quality
+
+- Verified workspace formatting, compilation, and tests; the WebAssembly UI build; the production documentation build; documentation synchronization; and Git whitespace checks.
+
 ## [0.1.1] - 2026-07-18
 
 ### Added
