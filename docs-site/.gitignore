@@ -1,0 +1,165 @@
+# =============================================================================
+# NODE.JS / NPM / PNPM / YARN
+# =============================================================================
+
+# Dependency directories
+jspm_packages/
+node_modules/
+.pnpm-store/
+web_modules/
+
+# Package manager files
+.npm
+.yarn-integrity
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Package outputs
+*.tgz
+
+# =============================================================================
+# LOGS AND DIAGNOSTICS
+# =============================================================================
+
+# Logs
+*.log
+lerna-debug.log*
+logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Runtime data
+*.pid
+*.pid.lock
+*.seed
+pids
+
+# Optional REPL history
+.node_repl_history
+
+# TernJS port file
+.tern-port
+
+# Vite logs files
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# =============================================================================
+# BUILD OUTPUTS AND CACHES
+# =============================================================================
+
+# General cache directories
+.cache
+.cache/
+.parcel-cache
+.temp
+
+# Build outputs
+build/
+build/Release
+dist
+out
+
+# Coverage and testing
+*.lcov
+coverage
+.nyc_output
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Tool-specific caches
+.eslintcache
+.fusebox/
+.grunt
+.stylelintcache
+.idea
+
+# =============================================================================
+# FRAMEWORK-SPECIFIC
+# =============================================================================
+
+# Docusaurus
+.docusaurus
+.docusaurus/
+
+# Firebase
+.firebase/
+
+# Gatsby
+# Comment in the public line in if your project uses Gatsby and not Next.js
+# https://nextjs.org/blog/next-9-1#public-directory-support
+# public
+
+# Next.js
+.next
+
+# Nuxt.js
+.nuxt
+
+# Serverless
+.serverless/
+
+# Svelte Kit
+.svelte-kit/
+
+# Vitepress
+**/.vitepress/cache
+**/.vitepress/dist
+
+# Vuepress
+.vuepress/dist
+
+# =============================================================================
+# ENVIRONMENT AND CONFIGURATION
+# =============================================================================
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Build configuration
+.build/.build.env
+
+# Legacy configurations
+bower_components
+lib-cov
+.lock-wscript
+
+# VSCode testing
+.vscode-test
+
+# AWS DynamoDB
+.dynamodb/
+
+# =============================================================================
+# PROJECT-SPECIFIC (DOCUSAURUS TEMPLATE)
+# =============================================================================
+
+# Build artifacts
+artifacts/
+
+# Auto-generated configuration files
+data/*.json
+
+# Compiled JavaScript from TypeScript
+scripts/**/*.js
+src/**/*.js
+
+# Environment setup script
+set-environment.ps1
+
+# Static files
+static/CNAME
+
+data/index.ts

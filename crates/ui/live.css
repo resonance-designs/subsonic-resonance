@@ -11,6 +11,11 @@
 .real-player .now, .real-player .now > div { min-width: 0; }
 .real-player .now b, .real-player .now span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .empty-source { font-size: 10px; color: var(--muted); padding: 10px; }
+.source-button { width: 100%; padding: 9px 8px; display: grid; grid-template-columns: 8px 1fr; align-items: center; gap: 9px; }
+.source-button span { display: grid; min-width: 0; }
+.source-button b, .source-button small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-button b { font-size: 11px; }
+.source-button small { color: var(--muted); font-size: 8px; }
 .provider-list article > button:not(.remove) { border: 1px solid var(--line); background: transparent; padding: 8px 12px; }
 @media (max-width: 600px) {
   .real-feature > .cover { width: min(230px, 68vw); }

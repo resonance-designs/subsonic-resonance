@@ -1,0 +1,23 @@
+# This hook is called when validating commit messages
+# It ensures commit messages meet basic standards
+
+# Get the commit message
+commit_message=$(cat "$1")
+
+# Check if commit message is not empty and has reasonable length
+if [ ${#commit_message} -lt 10 ]; then
+    echo "❌ Commit message must be at least 10 characters long"
+    echo "Current message: '$commit_message'"
+    exit 1
+fi
+
+# Check for conventional commit format (optional)
+if ! echo "$commit_message" | grep -qE "^(feat|fix|docs|style|refactor|test|chore|ci|build|perf|revert)(\(.+\))?: .+"; then
+    echo "⚠️  Consider using conventional commit format:"
+    echo "   feat: add new feature"
+    echo "   fix: resolve bug"
+    echo "   docs: update documentation"
+    echo "   etc."
+fi
+
+echo "✅ Commit message looks good!"

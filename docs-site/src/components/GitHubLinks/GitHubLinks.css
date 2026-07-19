@@ -1,0 +1,196 @@
+/**
+ * GitHub Links Component Styles
+ * Professional styling for GitHub-related links in the navbar
+ */
+
+.github-links {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 10px;
+}
+
+.github-links__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ifm-color-emphasis-700);
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.github-links__link:hover {
+  color: var(--ifm-color-primary);
+  background: var(--ifm-color-emphasis-100);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.github-links__link:active {
+  transform: translateY(0);
+}
+
+/* Icon styling */
+.github-links__icon {
+  font-size: 1rem;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.github-links__link:hover .github-links__icon {
+  opacity: 1;
+}
+
+/* Dropdown styling */
+.github-links--dropdown {
+  position: relative;
+}
+
+.github-links__dropdown-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ifm-color-emphasis-700);
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+
+.github-links__dropdown-toggle:hover {
+  color: var(--ifm-color-primary);
+  background: var(--ifm-color-emphasis-100);
+}
+
+.github-links__dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1000;
+  min-width: 160px;
+  padding: 0.5rem 0;
+  margin: 0.25rem 0 0;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
+}
+
+.github-links--dropdown:hover .github-links__dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.github-links__dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  color: var(--ifm-color-emphasis-700);
+  text-decoration: none;
+  transition: background 0.2s ease;
+  font-size: 0.875rem;
+}
+
+.github-links__dropdown-item:hover {
+  background: var(--ifm-color-emphasis-100);
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+/* Badge style variant */
+.github-links__link--badge {
+  background: var(--ifm-color-emphasis-100);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+}
+
+.github-links__link--badge:hover {
+  background: var(--ifm-color-primary-lightest);
+  border-color: var(--ifm-color-primary-light);
+  color: var(--ifm-color-primary-dark);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark theme styles */
+[data-theme='dark'] .github-links__link {
+  color: var(--ifm-color-emphasis-600);
+}
+
+[data-theme='dark'] .github-links__link:hover {
+  color: var(--ifm-color-primary-light);
+  background: var(--ifm-color-emphasis-200);
+}
+
+[data-theme='dark'] .github-links__dropdown-toggle {
+  color: var(--ifm-color-emphasis-600);
+}
+
+[data-theme='dark'] .github-links__dropdown-toggle:hover {
+  color: var(--ifm-color-primary-light);
+  background: var(--ifm-color-emphasis-200);
+}
+
+[data-theme='dark'] .github-links__dropdown-menu {
+  background: var(--ifm-background-surface-color);
+  border-color: var(--ifm-color-emphasis-300);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme='dark'] .github-links__dropdown-item {
+  color: var(--ifm-color-emphasis-600);
+}
+
+[data-theme='dark'] .github-links__dropdown-item:hover {
+  background: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-primary-light);
+}
+
+[data-theme='dark'] .github-links__link--badge {
+  background: var(--ifm-color-emphasis-200);
+  border-color: var(--ifm-color-emphasis-300);
+}
+
+[data-theme='dark'] .github-links__link--badge:hover {
+  background: var(--ifm-color-primary-dark);
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary-lightest);
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .github-links {
+    gap: 0.25rem;
+  }
+
+  .github-links__link {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8125rem;
+  }
+
+  /* Hide labels on small screens, show only icons */
+  .github-links--mobile-icons-only
+    .github-links__link
+    span:not(.github-links__icon) {
+    display: none;
+  }
+}

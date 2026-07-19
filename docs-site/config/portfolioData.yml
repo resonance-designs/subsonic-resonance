@@ -1,0 +1,268 @@
+header:
+  title: Portfolio
+  subtitle: Technical Projects & Experience
+
+technologies:
+  - name: Backend
+    subCategories:
+      - name: .NET
+        subCategories:
+          - .NET Core
+          - .NET Framework
+          - ASP.NET Core
+          - Blazor
+
+      - name: ASP.NET
+        subCategories:
+          - WebAPI
+          - MVC
+          - Razor Pages
+
+      - name: C#
+
+      - name: Node.JS
+
+      - name: Python
+
+      - name: ORM
+        subCategories:
+          - Entity Framework
+          - Dapper
+          - TypeORM
+          - Mongoose
+
+      - name: API
+        subCategories:
+          - REST
+          - GraphQL
+          - gRPC
+          - WebSockets
+
+      - name: Caching
+        subCategories:
+          - Redis
+          - Memcached
+
+  - name: Frontend
+    subCategories:
+      - name: JavaScript
+        subCategories:
+          - ES6+
+
+      - name: TypeScript
+
+      - name: React
+
+      - name: Angular
+
+      - name: State Management
+        subCategories:
+          - Redux
+          - Redux Toolkit
+          - RxJS
+
+      - name: jQuery / UI
+
+      - name: HTML & CSS
+        subCategories:
+          - Bootstrap
+          - Sass
+          - Less
+          - Material
+          - PostCSS
+          - Tailwind CSS
+
+      - name: Tooling
+        subCategories:
+          - npm
+          - Yarn
+          - pnpm
+          - Webpack
+          - Vite
+
+  - name: Database
+    subCategories:
+      - name: SQL
+        subCategories:
+          - SQL Server
+          - MariaDB
+          - SQLite
+          - PostgreSQL
+
+      - name: MongoDB
+
+      - name: DynamoDB
+
+      - name: VoltDB
+
+  - name: DevOps
+    subCategories:
+      - name: Docker
+        subCategories:
+          - Docker Compose
+          - Docker Stacks
+
+      - name: Kubernetes
+        subCategories:
+          - AKS
+          - EKS
+          - K3s
+
+      - name: CI/CD
+        subCategories:
+          - GitHub Actions
+          - Azure Pipelines
+          - GitLab CI
+          - Jenkins
+          - TeamCity
+          - Octopus Deploy
+          - YAML Pipelines
+
+      - name: IaC
+        subCategories:
+          - CloudFormation
+          - ARM Templates
+          - Terraform
+          - Bicep
+
+      - name: Observability
+        subCategories:
+          - Prometheus
+          - Grafana
+          - Loki
+          - ELK (Elasticsearch, Logstash, Kibana)
+
+  - name: Cloud
+    subCategories:
+      - name: Azure
+        subCategories:
+          - App Service
+          - ARM
+          - Cosmos DB
+          - Data Lake
+          - Functions
+          - Service Bus
+
+      - name: AWS
+        subCategories:
+          - Lambda
+          - SNS
+          - SQS
+          - EC2
+          - S3
+          - RDS
+          - (Uses DynamoDB in Database)
+
+  - name: Automation
+    subCategories:
+      - name: Bash
+
+      - name: PowerShell
+        subCategories:
+          - Carbon
+          - Chocolatey
+          - Psake
+          - Pester
+
+  - name: QA
+    subCategories:
+      - name: Testing
+        subCategories:
+          - xUnit
+          - NUnit
+          - Jest
+          - Vitest
+          - Playwright
+          - Mocha (Legacy)
+          - Sinon (Legacy)
+
+  - name: Data/BI
+    subCategories:
+      - name: Business Intelligence
+        subCategories:
+          - Power BI
+          - Tableau
+          - Amazon QuickSight
+
+  - name: Architecture
+    subCategories:
+      - name: Design Patterns
+        subCategories:
+          - DDD
+          - Event-Driven Architecture
+          - Microservices
+          - SOLID
+          - TDD
+
+  - name: Security
+    subCategories:
+      - name: AuthN/Z
+        subCategories:
+          - OAuth2 / OIDC
+          - JWT
+          - Azure AD (Entra ID)
+
+  - name: Methodology
+    subCategories:
+      - name: Agile
+        subCategories:
+          - Scrum
+          - Kanban
+          - Lean
+
+projects:
+  - category: Desktop
+    icon: 🖥️
+    description: Windows desktop applications and utilities
+
+  - category: Frontend
+    icon: 🎨
+    description: React, Angular, and modern web applications with responsive design and user experience focus
+
+  - category: Backend
+    icon: 🔧
+    description: C# .NET, Node.js, TypeScript applications including APIs, microservices, and system integrations
+
+  - category: Automation
+    icon: ⚡
+    description: PowerShell, Bash, build pipelines, deployment automation, developer productivity tools
+
+  - category: Open Source
+    icon: 🤝
+    description: Package manager contributions, GitHub projects, community-driven collaboration
+
+  - category: Infrastructure
+    icon: ☁️
+    description: Docker containerization, Kubernetes, CI/CD pipelines, cloud deployments (Azure, AWS), and automation solutions
+
+stats:
+  - number: 20+
+    label: Years Experience
+
+  - number: 25+
+    label: Technologies
+
+  - number: 50+
+    label: Projects Delivered
+
+  - number: 10+
+    label: Languages & Frameworks
+
+  - number: 3+
+    label: Cloud Platforms
+
+  - number: 100+
+    label: CI/CD Automations
+
+  - number: 7
+    label: Leadership Roles
+
+  - number: 4
+    label: Countries (USA, Spain, Bulgaria, Remote Global)
+
+  - number: Open Source
+    label: Contributor
+
+seo:
+  title: Welcome
+  description: Technical portfolio showcasing 20+ years of full-stack development, solution architecture, DevOps, cloud, and automation across .NET, TypeScript, React, Azure, AWS, and more.

@@ -1,0 +1,57 @@
+# GitHub Project Configuration
+# This file contains all GitHub-related configuration for the portfolio project
+
+# Repository information
+repo: 'resonance-designs/subsonic-resonance'
+organization: 'resonance-designs'
+project: 'subsonic-resonance'
+
+# All GitHub URLs
+urls:
+  repository: 'https://github.com/resonance-designs/subsonic-resonance'
+  issues: 'https://github.com/resonance-designs/subsonic-resonance/issues'
+  discussions: 'https://github.com/resonance-designs/subsonic-resonance/discussions'
+  docs: 'https://github.com/resonance-designs/subsonic-resonance#readme'
+  pages: 'https://resonance-designs.github.io/subsonic-resonance/'
+  packages: 'https://github.com/resonance-designs/subsonic-resonance/packages'
+  api: 'https://api.github.com/repos/resonance-designs/subsonic-resonance'
+  contributors: 'https://github.com/resonance-designs/subsonic-resonance/contributors'
+  releases: 'https://github.com/resonance-designs/subsonic-resonance/releases'
+  pulls: 'https://github.com/resonance-designs/subsonic-resonance/pulls'
+  actions: 'https://github.com/resonance-designs/subsonic-resonance/actions'
+  readme: 'https://github.com/resonance-designs/subsonic-resonance/blob/main/README.md'
+  avatar: 'https://github.com/resonance-designs.png'
+
+# Project metadata
+metadata:
+  defaultBranch: 'main'
+  license: 'Proprietary'
+  topics:
+    - 'rust'
+    - 'opensubsonic'
+    - 'music'
+    - 'streaming'
+    - 'tauri'
+    - 'leptos'
+  description: 'A Windows-first, cross-platform OpenSubsonic streaming client written in Rust.'
+
+# Additional configuration options
+features:
+  enableIssueLinks: true
+  enableContributorLinks: true
+  enableReleaseNotes: true
+  showBranchInfo: false
+
+# Integration settings
+integrations:
+  githubActions:
+    enabled: true
+    workflows:
+      - 'ci.yml'
+      - 'release.yml'
+      - 'deploy.yml'
+  packages:
+    enabled: true
+    registries:
+      - 'npm'
+      - 'docker'

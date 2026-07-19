@@ -1,8 +1,11 @@
 # Subsonic Resonance
 
+![Static Badge](https://img.shields.io/badge/Version-0.1.1-orange)
+![Static Badge](https://img.shields.io/badge/Latest_Release-v0.1.1-green)
+
 Subsonic Resonance is a Windows-first, cross-platform OpenSubsonic streaming client written in Rust. It uses a shared Leptos/WebAssembly interface for the browser and Tauri desktop shell, with provider integrations behind a provider-neutral Rust API.
 
-The project is currently at `0.1.0` and under active development.
+The project is currently at `0.1.1` and under active development toward the `0.2.0` library-experience release.
 
 ## Current functionality
 
@@ -10,14 +13,15 @@ The project is currently at `0.1.0` and under active development.
 - Authenticate with an OpenSubsonic API key or Subsonic salted password token.
 - Fall back to legacy directory-based browsing for servers that omit modern ID3 browsing results.
 - Verify new connections with `ping` before registering them.
-- Switch the active provider from the sidebar.
-- Browse recently added albums from the selected provider.
-- Load tracks from an album and search the selected library.
+- Query every connected provider concurrently as one unified library.
+- Browse albums from all available providers without selecting a globally active connection.
+- Load provider-qualified album tracks and search every connected library from Home.
+- Continue displaying successful sources when another provider is offline, unauthorized, invalid, or times out.
 - Proxy cover artwork and audio without exposing credentials to the browser.
 - Stream audio through the browser with byte-range support for seeking.
 - Run the same Leptos UI in a browser or Tauri 2 desktop shell.
 
-The Albums, Artists, Playlists, and dedicated Search pages are placeholders. Album browsing and search currently operate from Home.
+The Albums, Artists, Playlists, and dedicated Search pages are placeholders. Unified album browsing and search currently operate from Home.
 
 ## Architecture
 
@@ -139,6 +143,55 @@ Set-Location crates/ui
 trunk build index.html
 ```
 
+The root Node project also exposes shortcuts:
+
+```powershell
+npm run cargo:build
+npm run server:start
+```
+
+`cargo:build` compiles the complete Rust workspace. `server:start` starts the Axum backend for local development.
+
+## Documentation site
+
+The Docusaurus project in `docs-site` generates project documentation from this README, `TODO.md`, `CHANGELOG.md`, and `LICENSING.md`.
+
+Install the Node dependencies once:
+
+```powershell
+npm install
+pnpm --dir docs-site install --ignore-scripts
+```
+
+Synchronize or run the documentation site:
+
+```powershell
+npm run docs:sync
+npm run docs:start
+npm run docs:build
+npm run docs:quality
+```
+
+With the Resonance browser UI running on port 8080, run `npm run lighthouse`. With the documentation development server running on port 3000, run `npm run lighthouse:docs`. Lighthouse JSON reports are written beneath `artifacts/lighthouse`.
+
+Use `npm run version:sync -- 0.1.1` to synchronize an explicit project version across Cargo, Node, and documentation metadata. Without an argument, the script uses the current Cargo workspace version.
+
+## Release automation
+
+Preview release branch and tag creation without changing Git:
+
+```powershell
+npm run git:release:dry-run
+```
+
+After committing all intended changes, create and publish the release:
+
+```powershell
+npm run git:release
+```
+
+The release command reads the Cargo workspace version, confirms all Cargo, Node, documentation, and changelog versions agree, requires a clean worktree, runs the Rust tests and documentation build, creates `release/<version>`, creates the annotated `v<version>` tag, and pushes the branch and tag to `origin` atomically. It stops without changing Git when a local or remote release branch/tag already exists. Pass `-- --skip-checks` only when the release checks have already been completed independently.
+
 ## Roadmap
 
 ### 0.2 — Library experience
@@ -197,3 +250,4 @@ trunk build index.html
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.
 See [TODO.md](TODO.md) for the tracked implementation backlog and acceptance criteria.
+See [LICENSING.md](LICENSING.md) for the intended distribution model, source-access policy, and third-party licensing checklist.

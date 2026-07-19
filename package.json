@@ -1,0 +1,41 @@
+{
+  "name": "subsonic-resonance",
+  "version": "0.1.1",
+  "private": true,
+  "author": "Richard Bakos @ Resonance Designs (mailto:info@resonancedesigns.dev)",
+  "description": "An OpenSubsonic streaming client written in Rust.",
+  "keywords": [
+    "streaming",
+    "audio",
+    "music",
+    "opensubsonic",
+    "resonance designs"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/resonance-designs/subsonic-resonance.git"
+  },
+  "homepage": "https://github.com/resonance-designs/subsonic-resonance#readme",
+  "bugs": {
+    "url": "https://github.com/resonance-designs/subsonic-resonance/issues"
+  },
+  "scripts": {
+    "cargo:build": "cargo build --workspace",
+    "server:start": "cargo run -p resonance-server",
+    "docs:sync": "node scripts/sync-docs.js",
+    "docs:build": "npm run docs:sync && pnpm --dir docs-site build",
+    "docs:start": "npm run docs:sync && pnpm --dir docs-site start",
+    "docs:serve": "pnpm --dir docs-site serve --dir artifacts",
+    "docs:quality": "pnpm --dir docs-site quality-ci",
+    "version:sync": "node scripts/version-sync.js",
+    "lighthouse": "node scripts/run-lighthouse.js http://127.0.0.1:8080",
+    "lighthouse:docs": "node scripts/run-lighthouse.js http://127.0.0.1:3000",
+    "git:release": "node scripts/git-release.js",
+    "git:release:dry-run": "node scripts/git-release.js --dry-run"
+  },
+  "devDependencies": {
+    "axe-core": "^4.10.3",
+    "chrome-launcher": "^1.1.2",
+    "lighthouse": "^12.8.2"
+  }
+}
