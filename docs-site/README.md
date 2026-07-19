@@ -13,6 +13,6 @@ npm run docs:build
 npm run docs:quality
 ```
 
-The development server uses `http://127.0.0.1:3000` by default. Production output is written to `docs-site/artifacts` and is excluded from version control.
+The development server uses `http://127.0.0.1:3001` by default so it cannot conflict with the Resonance API on port 3000. Production output is written to `docs-site/artifacts` and is excluded from version control.
 
 Run `npm run lighthouse:docs` while the documentation server is running to produce an accessibility, best-practices, and SEO report.

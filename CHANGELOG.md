@@ -20,9 +20,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Added a Docusaurus documentation application under `docs-site`, based on the Resonance Designs Docusaurus template.
 - Added generated documentation pages for installation, architecture, project status, roadmap, implementation tracking, licensing, and release history.
 - Added root Node commands for synchronizing, building, serving, and quality-checking the documentation site.
-- Added Lighthouse commands for auditing the browser application and documentation site, with JSON reports and a configurable minimum accessibility score.
+- Added Lighthouse commands for auditing the browser application and documentation site in offline deterministic or optional Codex AI-authored modes, with timestamped JSON reports, automatically generated Markdown accessibility assessments, a reusable WCAG 2.2 AA assessment template, validated AI output, explicit custom target labels, and a configurable minimum accessibility score.
 - Added version synchronization across Cargo workspace metadata, the explicit UI crate version, Node packages and lockfile, documentation configuration, API metadata, README, Cargo lockfile, and generated release documentation.
 - Added a guarded Git release command with version-consistency checks, build/test verification, collision detection, annotated tags, atomic branch/tag publishing, and a non-mutating dry-run mode.
+- Added an `npm run build:interactive:win` PowerShell launcher that compiles the Rust workspace and offers to start either the complete browser application or only the API server.
+- Added an equivalent `npm run build:interactive:unix` Bash launcher for Linux and macOS.
 
 ### Changed
 
@@ -36,9 +38,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Made `README.md`, `TODO.md`, `CHANGELOG.md`, and `LICENSING.md` the canonical sources for generated documentation pages.
 - Configured documentation builds to fail on broken links and excluded the template's sample documentation from published routes.
 - Corrected the root Cargo build command to compile the complete workspace and separated backend startup into its own command.
+- Added separate UI and combined application startup commands, standardized the browser UI on port 8088, and moved the documentation server to port 3001 to avoid the API on port 3000.
 
 ### Fixed
 
+- Added interactive pre-build and startup port/process checks with process IDs and opt-in termination, including detection of Windows executables that lock Cargo build artifacts, and disabled Trunk address lookup to prevent confusing local hostname aliases and duplicate-listener failures.
 - Added fallback from ID3-based `getAlbumList2`/`getAlbum` calls to legacy `getAlbumList`/`getMusicDirectory` responses for partial Subsonic implementations such as Bandcamp's open beta.
 - Made Subsonic response decoding tolerant of numeric IDs, string-encoded numeric metadata, and negative “unknown” sentinels used by Bandcamp, and improved schema errors so the failing endpoint and field are reported precisely.
 

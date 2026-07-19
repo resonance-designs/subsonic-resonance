@@ -21,21 +21,28 @@
   },
   "scripts": {
     "cargo:build": "cargo build --workspace",
+    "build:interactive:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-and-run.ps1",
+    "build:interactive:unix": "bash scripts/build-and-run.sh",
     "server:start": "cargo run -p resonance-server",
+    "ui:start": "node scripts/run-ui.js",
+    "app:start": "concurrently --kill-others --names api,ui \"npm:server:start\" \"npm:ui:start\"",
     "docs:sync": "node scripts/sync-docs.js",
     "docs:build": "npm run docs:sync && pnpm --dir docs-site build",
     "docs:start": "npm run docs:sync && pnpm --dir docs-site start",
-    "docs:serve": "pnpm --dir docs-site serve --dir artifacts",
+    "docs:serve": "pnpm --dir docs-site serve --dir artifacts --port 3001",
     "docs:quality": "pnpm --dir docs-site quality-ci",
     "version:sync": "node scripts/version-sync.js",
-    "lighthouse": "node scripts/run-lighthouse.js http://127.0.0.1:8080",
-    "lighthouse:docs": "node scripts/run-lighthouse.js http://127.0.0.1:3000",
+    "lighthouse": "node scripts/run-lighthouse.js http://127.0.0.1:8088",
+    "lighthouse:ai": "node scripts/run-lighthouse.js http://127.0.0.1:8088 --ai",
+    "lighthouse:docs": "node scripts/run-lighthouse.js http://127.0.0.1:3001",
+    "lighthouse:docs:ai": "node scripts/run-lighthouse.js http://127.0.0.1:3001 --ai",
     "git:release": "node scripts/git-release.js",
     "git:release:dry-run": "node scripts/git-release.js --dry-run"
   },
   "devDependencies": {
     "axe-core": "^4.10.3",
     "chrome-launcher": "^1.1.2",
+    "concurrently": "^9.2.1",
     "lighthouse": "^12.8.2"
   }
 }

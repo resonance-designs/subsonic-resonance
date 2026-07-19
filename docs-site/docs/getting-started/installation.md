@@ -13,6 +13,7 @@ sidebar_position: 1
 - `wasm32-unknown-unknown` Rust target
 - Trunk for the browser UI
 - Microsoft C++ Build Tools and WebView2 for Tauri on Windows
+- Optional: Codex CLI, authenticated with access to GPT-5.6 Sol, for AI-authored Lighthouse accessibility assessments
 
 Install the browser tooling once:
 
@@ -35,10 +36,10 @@ In a second terminal:
 
 ```powershell
 Set-Location crates/ui
-trunk serve index.html --address 127.0.0.1 --port 8080 --open
+trunk serve index.html --address 127.0.0.1 --port 8088 --open
 ```
 
-Open `http://127.0.0.1:8080`, then use Settings → Connections → Add Provider. The backend verifies the connection before it appears in the source list.
+Open `http://127.0.0.1:8088`, then use Settings → Connections → Add Provider. The backend verifies the connection before it appears in the source list.
 
 If either process was already running when the code changed, stop it with `Ctrl+C` and restart it.
 
@@ -63,14 +64,14 @@ cargo run -p resonance-server
 
 ### Environment variables
 
-| Variable | Purpose | Default |
-| --- | --- | --- |
-| `RESONANCE_SERVER_URL` | Optional default Subsonic server URL | unset |
-| `RESONANCE_API_KEY` | API key for the default provider | unset |
-| `RESONANCE_USERNAME` | Username for password authentication | unset |
-| `RESONANCE_PASSWORD` | Password used to generate salted tokens | unset |
-| `RESONANCE_BIND` | Axum API listen address | `127.0.0.1:3000` |
-| `RUST_LOG` | Rust tracing filter | built-in application defaults |
+| Variable               | Purpose                                 | Default                       |
+| ---------------------- | --------------------------------------- | ----------------------------- |
+| `RESONANCE_SERVER_URL` | Optional default Subsonic server URL    | unset                         |
+| `RESONANCE_API_KEY`    | API key for the default provider        | unset                         |
+| `RESONANCE_USERNAME`   | Username for password authentication    | unset                         |
+| `RESONANCE_PASSWORD`   | Password used to generate salted tokens | unset                         |
+| `RESONANCE_BIND`       | Axum API listen address                 | `127.0.0.1:3000`              |
+| `RUST_LOG`             | Rust tracing filter                     | built-in application defaults |
 
 ## Windows desktop shell
 
@@ -99,6 +100,24 @@ The root Node project also exposes shortcuts:
 ```powershell
 npm run cargo:build
 npm run server:start
+npm run ui:start
+npm run app:start
 ```
 
-`cargo:build` compiles the complete Rust workspace. `server:start` starts the Axum backend for local development.
+`cargo:build` compiles the complete Rust workspace. `server:start` starts only the Axum API on port 3000, while `ui:start` starts only the browser UI on port 8088. Use `app:start` to run both processes together.
+
+Windows developers can also use the interactive build launcher. It builds the complete Cargo workspace and then prompts whether to start both the API and browser UI or only the API:
+
+```powershell
+npm run build:interactive:win
+```
+
+The underlying script can also be invoked directly with `.\scripts\build-and-run.ps1`.
+
+On Linux and macOS, use the equivalent Bash launcher:
+
+```bash
+npm run build:interactive:unix
+```
+
+The Bash script can also be invoked directly with `bash scripts/build-and-run.sh`. Both launchers remain attached after startup so `Ctrl+C` can reliably stop the processes and release their ports. Before compiling or starting a service, the launchers check required ports; Windows also detects a running `resonance-server.exe` that would lock the Cargo build artifact. When conflicts are found, the launcher identifies the processes and asks for permission before stopping them. Declining exits without building or starting Resonance.

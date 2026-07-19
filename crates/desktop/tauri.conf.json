@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "trunk serve crates/ui/index.html",
     "beforeBuildCommand": "trunk build crates/ui/index.html --release",
-    "devUrl": "http://localhost:8080",
+    "devUrl": "http://127.0.0.1:8088",
     "frontendDist": "../ui/dist"
   },
   "app": {
