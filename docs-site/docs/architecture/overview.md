@@ -16,14 +16,14 @@ sidebar_position: 1
 | `resonance-desktop`           | Tauri 2 Windows/desktop shell.                                                  |
 
 ```text
-Browser / Tauri UI
-        │
-        ▼
+      Browser / Tauri UI
+              │
+              ▼
 Axum API and provider registry
-        │
-        ▼
-MusicProvider trait
-        │
-        ▼
+              │
+              ▼
+      MusicProvider trait
+              │
+              ▼
 OpenSubsonic / Subsonic server
 ```

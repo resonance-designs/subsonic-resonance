@@ -140,7 +140,7 @@ async fn load_library(
 ) {
     loading.set(true);
     error.set(None);
-    match get_json::<AggregateResponse<Album>>("/library/albums?limit=30").await {
+    match get_json::<AggregateResponse<Album>>("/library/albums?limit=500").await {
         Ok(response) => {
             let first = response.items.first().map(|album| album.id.clone());
             albums.set(response.items);
@@ -195,14 +195,14 @@ fn Nav(active: RwSignal<Page>, providers: RwSignal<Vec<Provider>>) -> impl IntoV
     let item = move |page, label, glyph| view! {<button class:active=move||active.get()==page on:click=move |_|active.set(page)><span class="nav-icon">{glyph}</span><span>{label}</span></button>};
     view! {
         <aside class="sidebar">
-            <div class="brand"><span class="brand-mark">"R"</span><div><strong>"RESONANCE"</strong><small>"SUBSONIC CLIENT"</small></div></div>
+            <div class="brand"><img class="brand-mark" src="/img/logo.png" alt=""/><div><small class="letter-stretch"><span>"S"</span><span>"u"</span><span>"b"</span><span>"s"</span><span>"o"</span><span>"n"</span><span>"i"</span><span>"c"</span></small><strong>"Resonance"</strong></div></div>
             <nav aria-label="Primary navigation">{item(Page::Home,"Home","⌂")}{item(Page::Albums,"Albums","▣")}{item(Page::Artists,"Artists","◉")}{item(Page::Playlists,"Playlists","≡")}{item(Page::Search,"Search","⌕")}{item(Page::Settings,"Settings","⚙")}</nav>
             <section class="sources"><p class="eyebrow">"SOURCES · ALL ACTIVE"</p><div class="source-list">
                 {move||providers.get().into_iter().map(|p|view!{<div class="source-button"><i class="online"></i><span><b>{p.name}</b><small>{format!("{} · {}",p.server_type,p.server_version)}</small></span></div>}).collect_view()}
                 <Show when=move||providers.get().is_empty()><p class="empty-source">"No connected servers"</p></Show>
             </div></section>
         </aside>
-        <header class="mobile-head"><div class="brand"><span class="brand-mark">"R"</span><strong>"RESONANCE"</strong></div><button aria-label="Settings" on:click=move |_|active.set(Page::Settings)>"⚙"</button></header>
+        <header class="mobile-head"><div class="brand"><img class="brand-mark" src="/img/logo.png" alt=""/><div><small class="letter-stretch"><span>"S"</span><span>"u"</span><span>"b"</span><span>"s"</span><span>"o"</span><span>"n"</span><span>"i"</span><span>"c"</span></small><strong>"Resonance"</strong></div></div><button aria-label="Settings" on:click=move |_|active.set(Page::Settings)>"⚙"</button></header>
     }
 }
 
@@ -262,6 +262,211 @@ fn format_duration(seconds: Option<u64>) -> String {
     seconds
         .map(|s| format!("{}:{:02}", s / 60, s % 60))
         .unwrap_or_else(|| "—".into())
+}
+
+fn load_album_tracks(
+    id: MediaId,
+    tracks: RwSignal<Vec<Track>>,
+    current: RwSignal<usize>,
+    loading: RwSignal<bool>,
+    error: RwSignal<Option<String>>,
+) {
+    loading.set(true);
+    error.set(None);
+    spawn_local(async move {
+        match get_json::<AlbumDetail>(&format!(
+            "/library/albums/{}/{}",
+            encode(&id.provider_id),
+            encode(&id.item_id)
+        ))
+        .await
+        {
+            Ok(detail) => {
+                tracks.set(detail.tracks);
+                current.set(0);
+            }
+            Err(message) => error.set(Some(message)),
+        }
+        loading.set(false);
+    });
+}
+
+#[component]
+fn ProviderNotices(issues: RwSignal<Vec<ProviderIssue>>) -> impl IntoView {
+    view! {
+        <Show when=move || !issues.get().is_empty()>
+            {move || issues.get().into_iter().map(|issue| view! {
+                <div class="library-error partial">
+                    <b>{format!("{} is unavailable", issue.provider_name)}</b>
+                    <p>{issue.message}</p>
+                </div>
+            }).collect_view()}
+        </Show>
+    }
+}
+
+#[component]
+fn TrackResults(
+    items: RwSignal<Vec<Track>>,
+    queue: RwSignal<Vec<Track>>,
+    current: RwSignal<usize>,
+    playing: RwSignal<bool>,
+    empty_message: &'static str,
+) -> impl IntoView {
+    view! {
+        <Show when=move || !items.get().is_empty() fallback=move || view! {
+            <div class="empty-results"><p>{empty_message}</p></div>
+        }>
+            <div class="track-list">
+                {move || items.get().into_iter().enumerate().map(|(idx, track)| {
+                    let result_items = items;
+                    view! {
+                        <button on:click=move |_| {
+                            queue.set(result_items.get());
+                            current.set(idx);
+                            playing.set(true);
+                        }>
+                            <span class="track-no">{track.track_number.map(|number| format!("{number:02}")).unwrap_or_else(|| "—".into())}</span>
+                            <span class="mini-cover"></span>
+                            <span class="track-name"><b>{track.title}</b><small>{format!("{} · {}", track.artist.unwrap_or_else(|| "Unknown artist".into()), track.source_name)}</small></span>
+                            <span class="track-album">{track.album.unwrap_or_default()}</span>
+                            <span class="track-time">{format_duration(track.duration_seconds)}</span>
+                        </button>
+                    }
+                }).collect_view()}
+            </div>
+        </Show>
+    }
+}
+
+#[component]
+fn AlbumsPage(
+    providers: RwSignal<Vec<Provider>>,
+    albums: RwSignal<Vec<Album>>,
+    tracks: RwSignal<Vec<Track>>,
+    current: RwSignal<usize>,
+    playing: RwSignal<bool>,
+    loading: RwSignal<bool>,
+    issues: RwSignal<Vec<ProviderIssue>>,
+    error: RwSignal<Option<String>>,
+) -> impl IntoView {
+    let filter = RwSignal::new(String::new());
+    let sort = RwSignal::new(String::from("title"));
+    let selected = RwSignal::new(None::<MediaId>);
+    let visible_albums = move || {
+        let needle = filter.get().trim().to_lowercase();
+        let mut items = albums.get();
+        if !needle.is_empty() {
+            items.retain(|album| {
+                album.name.to_lowercase().contains(&needle)
+                    || album
+                        .artist
+                        .as_deref()
+                        .unwrap_or_default()
+                        .to_lowercase()
+                        .contains(&needle)
+                    || album.source_name.to_lowercase().contains(&needle)
+            });
+        }
+        match sort.get().as_str() {
+            "artist" => items.sort_by_key(|album| {
+                (
+                    album.artist.clone().unwrap_or_default().to_lowercase(),
+                    album.name.to_lowercase(),
+                )
+            }),
+            "year" => items.sort_by_key(|album| {
+                (
+                    std::cmp::Reverse(album.year.unwrap_or(0)),
+                    album.name.to_lowercase(),
+                )
+            }),
+            "source" => items
+                .sort_by_key(|album| (album.source_name.to_lowercase(), album.name.to_lowercase())),
+            _ => items.sort_by_key(|album| album.name.to_lowercase()),
+        }
+        items
+    };
+
+    view! {<main class="content library-page">
+        <header class="editorial-head"><div><p class="eyebrow">"UNIFIED LIBRARY"</p><h1>"Albums"</h1><p>"Browse releases from every connected source."</p></div></header>
+        <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings to browse albums."</p></section>}>
+            <div class="library-toolbar">
+                <label><span>"Filter albums"</span><input type="search" placeholder="Title, artist, or source" on:input=move |event| filter.set(event_target_value(&event))/></label>
+                <label><span>"Sort by"</span><select on:change=move |event| sort.set(event_target_value(&event))><option value="title">"Title"</option><option value="artist">"Artist"</option><option value="year">"Newest year"</option><option value="source">"Source"</option></select></label>
+            </div>
+            <Show when=move || loading.get()><p class="library-state">"Loading albums…"</p></Show>
+            <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Could not load albums"</b><p>{message}</p></div>})}</Show>
+            <ProviderNotices issues/>
+            <div class="section-title"><div><p class="eyebrow">"ALL SOURCES"</p><h2>"Releases"</h2></div><span class="track-count">{move || format!("{} SHOWN", visible_albums().len())}</span></div>
+            <Show when=move || !visible_albums().is_empty() fallback=move || view! {<div class="empty-results"><p>"No albums match this filter."</p></div>}>
+                <div class="album-grid">{move || visible_albums().into_iter().map(|album| {
+                    let id = album.id.clone();
+                    let selected_id = id.clone();
+                    view! {<button class="album-card" class:selected=move || selected.get().as_ref() == Some(&selected_id) on:click=move |_| {selected.set(Some(id.clone())); load_album_tracks(id.clone(), tracks, current, loading, error)}><Artwork cover=album.cover_art.clone() title=album.name.clone()/><strong>{album.name}</strong><span>{album.artist.unwrap_or_else(|| "Unknown artist".into())}</span><small>{format!("{}{}", album.source_name, album.year.map(|year| format!(" · {year}")).unwrap_or_default())}</small></button>}
+                }).collect_view()}</div>
+            </Show>
+            <section class="tracks page-tracks"><div class="section-title"><div><p class="eyebrow">"SELECTED ALBUM"</p><h2>"Tracks"</h2></div><span class="track-count">{move || if selected.get().is_some() { format!("{} TRACKS", tracks.get().len()) } else { "0 TRACKS".into() }}</span></div><Show when=move || selected.get().is_some() fallback=move || view! {<div class="empty-results"><p>"Select an album to view its tracks."</p></div>}><TrackResults items=tracks queue=tracks current playing empty_message="This album did not return any tracks."/></Show></section>
+        </Show>
+    </main>}
+}
+
+#[component]
+fn SearchPage(
+    providers: RwSignal<Vec<Provider>>,
+    queue: RwSignal<Vec<Track>>,
+    current: RwSignal<usize>,
+    playing: RwSignal<bool>,
+) -> impl IntoView {
+    let query = RwSignal::new(String::new());
+    let results = RwSignal::new(Vec::<Track>::new());
+    let issues = RwSignal::new(Vec::<ProviderIssue>::new());
+    let loading = RwSignal::new(false);
+    let error = RwSignal::new(None::<String>);
+    let searched = RwSignal::new(false);
+    let submitted_query = RwSignal::new(String::new());
+    let submit = move |_| {
+        let term = query.get().trim().to_string();
+        if term.is_empty() {
+            return;
+        }
+        loading.set(true);
+        searched.set(true);
+        submitted_query.set(term.clone());
+        error.set(None);
+        spawn_local(async move {
+            match get_json::<AggregateResponse<Track>>(&format!(
+                "/library/search?q={}&limit=100",
+                encode(&term)
+            ))
+            .await
+            {
+                Ok(response) => {
+                    results.set(response.items);
+                    issues.set(response.issues);
+                }
+                Err(message) => {
+                    results.set(Vec::new());
+                    issues.set(Vec::new());
+                    error.set(Some(message));
+                }
+            }
+            loading.set(false);
+        });
+    };
+
+    view! {<main class="content library-page search-page">
+        <header><p class="eyebrow">"ALL CONNECTED SOURCES"</p><h1>"Search"</h1><p>"Find tracks across the complete unified library."</p></header>
+        <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings before searching."</p></section>}>
+            <form class="library-search" on:submit=move |event| {event.prevent_default(); submit(())}><span>"⌕"</span><input autofocus type="search" aria-label="Search all connected sources" placeholder="Track, artist, or album" on:input=move |event| query.set(event_target_value(&event))/><button class="primary" type="submit" disabled=move || loading.get()>{move || if loading.get() {"Searching…"} else {"Search"}}</button></form>
+            <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Search failed"</b><p>{message}</p></div>})}</Show>
+            <ProviderNotices issues/>
+            <Show when=move || searched.get()>
+                <section class="tracks search-results"><div class="section-title"><div><p class="eyebrow">"SEARCH RESULTS"</p><h2>{move || format!("Results for “{}”", submitted_query.get())}</h2></div><span class="track-count">{move || format!("{} TRACKS", results.get().len())}</span></div><TrackResults items=results queue current playing empty_message="No tracks matched this search."/></section>
+            </Show>
+            <Show when=move || !searched.get()><div class="search-prompt"><span>"⌕"</span><h2>"Search every source at once"</h2><p>"Results retain their provider identity for reliable playback."</p></div></Show>
+        </Show>
+    </main>}
 }
 
 #[component]
@@ -340,7 +545,7 @@ pub fn App() -> impl IntoView {
         }
         spawn_local(load_library(albums, tracks, loading, issues, error));
     });
-    view! {<div class="app"><Nav active providers/><div class="view">{move||match active.get(){Page::Home=>view!{<Home providers albums tracks current playing loading issues error/>}.into_any(),Page::Settings=>view!{<Settings providers/>}.into_any(),_=>view!{<main class="content placeholder"><p class="eyebrow">"UNIFIED LIBRARY"</p><h1>"Coming next"</h1><p>"This page will use the new all-provider library service."</p></main>}.into_any()}}</div><nav class="mobile-nav">{[(Page::Home,"⌂","Home"),(Page::Albums,"▣","Albums"),(Page::Search,"⌕","Search"),(Page::Settings,"⚙","Settings")].into_iter().map(|(p,g,l)|view!{<button class:active=move||active.get()==p on:click=move |_|active.set(p)><span>{g}</span>{l}</button>}).collect_view()}</nav><Player tracks current playing/></div>}
+    view! {<div class="app"><Nav active providers/><div class="view">{move||match active.get(){Page::Home=>view!{<Home providers albums tracks current playing loading issues error/>}.into_any(),Page::Albums=>view!{<AlbumsPage providers albums tracks current playing loading issues error/>}.into_any(),Page::Search=>view!{<SearchPage providers queue=tracks current playing/>}.into_any(),Page::Settings=>view!{<Settings providers/>}.into_any(),_=>view!{<main class="content placeholder"><p class="eyebrow">"UNIFIED LIBRARY"</p><h1>"Coming next"</h1><p>"This page will use the new all-provider library service."</p></main>}.into_any()}}</div><nav class="mobile-nav">{[(Page::Home,"⌂","Home"),(Page::Albums,"▣","Albums"),(Page::Search,"⌕","Search"),(Page::Settings,"⚙","Settings")].into_iter().map(|(p,g,l)|view!{<button class:active=move||active.get()==p on:click=move |_|active.set(p)><span>{g}</span>{l}</button>}).collect_view()}</nav><Player tracks current playing/></div>}
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen(start)]

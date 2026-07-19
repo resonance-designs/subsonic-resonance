@@ -1,21 +1,153 @@
 .heroBanner {
-  padding: 0.1rem 0;
-  text-align: center;
+  padding: clamp(4rem, 8vw, 7rem) 1.5rem;
   position: relative;
   overflow: hidden;
-  background: var(--hero-primary-bg, #1e40af);
+  background: var(--hero-primary-bg, #494d5b);
   color: var(--hero-primary-text, #fff);
 }
 
+.heroGrid {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.8fr) minmax(0, 1.35fr);
+  align-items: center;
+  gap: clamp(2.5rem, 2vw, 6rem);
+  max-width: 1600px;
+}
+
+.heroCopy {
+  min-width: 0;
+  text-align: center;
+}
+
+.heroIdentity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(1rem, 2vw, 1.5rem);
+}
+
+.heroLogo {
+  flex: 0 1 auto;
+  max-width: min(55%, 305px);
+  height: auto;
+}
+
+.heroWordmark {
+  display: flex;
+  width: min(256px, 47%);
+  min-width: 0;
+  margin: 0;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.heroSubsonic,
+.heroResonance {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  line-height: 1;
+}
+
+.heroSubsonic {
+  font-size: clamp(1rem, 1.7vw, 1.5rem);
+}
+
+.heroResonance {
+  font-size: clamp(1.5rem, 2.5vw, 2.25rem);
+}
+
 .heroSubtitle {
-  font-size: 1.1rem;
-  margin-top: 0.5rem;
-  opacity: 0.9;
+  max-width: 34rem;
+  margin: 1.75rem auto 0;
+  color: var(--ifm-color-emphasis-700);
+  font-size: clamp(.5rem, 1.4vw, 0.9rem);
+  line-height: 1.65;
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.heroActions :global(a.button) {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+}
+
+.heroPreview {
+  min-width: 0;
+  padding: clamp(0.35rem, 0.8vw, 0.65rem);
+  border: 1px solid rgba(233, 107, 27, 0.4);
+  border-radius: 12px;
+  background: rgba(16, 22, 29, 0.72);
+  box-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.38);
+}
+
+.heroScreenshot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--resonance-line, #29313a);
+  border-radius: 7px;
 }
 
 @media screen and (max-width: 996px) {
   .heroBanner {
-    padding: 3rem 1rem;
+    padding: 3.5rem 1rem;
+  }
+
+  .heroGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3rem;
+  }
+
+  .heroCopy {
+    width: min(100%, 42rem);
+  }
+
+  .heroLogo {
+    width: clamp(8rem, 28vw, 14rem);
+  }
+
+  .heroWordmark {
+    width: clamp(10rem, 36vw, 16rem);
+  }
+
+  .heroPreview {
+    width: 100%;
+  }
+}
+
+@media screen and (max-width: 520px) {
+  .heroBanner {
+    padding: 2.75rem 0.25rem;
+  }
+
+  .heroIdentity {
+    gap: 0.75rem;
+  }
+
+  .heroLogo {
+    width: 48%;
+  }
+
+  .heroWordmark {
+    width: min(100%, 16rem);
+  }
+
+  .heroActions {
+    width: 100%;
+  }
+
+  .heroActions :global(.button) {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: normal;
   }
 }
 

@@ -50,6 +50,16 @@ function write(relativePath, contents) {
 }
 
 function main() {
+  const logoSource = path.join(rootDir, 'img', 'logo.png');
+  const logoTarget = path.join(rootDir, 'docs-site', 'static', 'img', 'logo.png');
+  const appAlbumsSource = path.join(rootDir, 'img', 'app-albums.png');
+  const appAlbumsTarget = path.join(rootDir, 'docs-site', 'static', 'img', 'app-albums.png');
+  if (!fs.existsSync(logoSource)) throw new Error('Required brand asset is missing: img/logo.png');
+  if (!fs.existsSync(appAlbumsSource)) throw new Error('Required application screenshot is missing: img/app-albums.png');
+  fs.mkdirSync(path.dirname(logoTarget), { recursive: true });
+  fs.copyFileSync(logoSource, logoTarget);
+  fs.copyFileSync(appAlbumsSource, appAlbumsTarget);
+
   const readme = read('README.md');
   const current = section(readme, 'Current functionality');
   const architecture = section(readme, 'Architecture');

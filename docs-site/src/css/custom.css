@@ -203,6 +203,11 @@
   box-shadow: var(--ifm-global-shadow-xl);
 }
 
+.navbar__logo img {
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 /* Enhanced buttons with professional depth and shadows */
 .button {
   border-radius: var(--ifm-button-border-radius);

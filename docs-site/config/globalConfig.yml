@@ -17,17 +17,18 @@ site:
 
 theme:
   navbar:
-    title: Resonance
     logo:
-      alt: Resonance
-      src: img/logo.svg
+      alt: Subsonic Resonance
+      src: img/logo.png
+      width: 4267
+      height: 4267
 
 features:
   giscusComments: false
   gitHubLinks: true
   navBarLinks: false
   badges: false
-  themeSwitcher: true
+  themeSwitcher: false
   textSizeSwitcher: true
   readerMode: true
   versionDisplay: true
