@@ -1,0 +1,109 @@
+/**
+ * @theme-id: agent
+ * @theme-name: Agent
+ * Agent Theme - Matching agent.subzerodev.com colors
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: #2563eb;
+  --ifm-color-primary-dark: #306cce;
+  --ifm-color-primary-darker: #2d66c3;
+  --ifm-color-primary-darkest: #2554a0;
+  --ifm-color-primary-light: #538ce9;
+  --ifm-color-primary-lighter: #72a1ed;
+  --ifm-color-primary-lightest: #9abcf2;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(37, 99, 235, 0.1);
+
+  /* Text and content colors from build agent site */
+  --ifm-font-color-base: #1c1e21;
+  --ifm-font-color-secondary: #525860;
+  --ifm-color-content-secondary: #525860;
+  --ifm-heading-color: #1c1e21;
+
+  /* Link colors */
+  --ifm-link-color: #2563eb;
+  --ifm-link-hover-color: #306cce;
+
+  /* Background colors matching the live site */
+  --ifm-background-color: #ffffff;
+  --ifm-background-surface-color: #ffffff;
+  --ifm-navbar-background-color: #ffffff;
+  --ifm-color-emphasis-100: #f5f6f7;
+  --ifm-color-emphasis-200: #ebedf0;
+  --ifm-color-emphasis-300: #dadde1;
+
+  /* Custom accent colors for build agent theme */
+  --ifm-color-success: #00a400;
+  --ifm-color-info: #54c7ec;
+  --ifm-color-warning: #ffba00;
+  --ifm-color-danger: #fa383e;
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  --ifm-color-primary: #7b9fb0;
+  --ifm-color-primary-dark: #6b8fa1;
+  --ifm-color-primary-darker: #628799;
+  --ifm-color-primary-darkest: #506f7a;
+  --ifm-color-primary-light: #8bafbf;
+  --ifm-color-primary-lighter: #98b9c7;
+  --ifm-color-primary-lightest: #aecad6;
+  --docusaurus-highlighted-code-line-bg: rgba(123, 159, 176, 0.3);
+
+  /* Dark mode text and content colors - matching live site */
+  --ifm-font-color-base: #e3e3e3;
+  --ifm-font-color-secondary: #ffffff;
+  --ifm-color-content-secondary: #ffffff;
+  --ifm-heading-color: #ffffff;
+
+  /* Dark mode link colors - white as requested */
+  --ifm-link-color: #ffffff;
+  --ifm-link-hover-color: #aecad6;
+
+  /* Dark mode background colors - exact match from live site */
+  --ifm-background-color: #1b1b1d;
+  --ifm-background-surface-color: #242526;
+  --ifm-navbar-background-color: #242526;
+  --ifm-color-emphasis-100: #242526;
+  --ifm-color-emphasis-200: #444950;
+  --ifm-color-emphasis-300: #606770;
+}
+
+.hero__title {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* Build Agent theme specific enhancements */
+.navbar {
+  box-shadow: 0 2px 4px rgba(74, 124, 89, 0.1);
+}
+
+.card {
+  border: 1px solid rgba(74, 124, 89, 0.1);
+}
+
+[data-theme='dark'] .card {
+  border: 1px solid rgba(123, 159, 176, 0.2);
+}
+
+/* Add natural gradient background */
+.hero {
+  background: linear-gradient(
+    135deg,
+    rgba(74, 124, 89, 0.05) 0%,
+    rgba(122, 143, 103, 0.05) 100%
+  );
+  padding: 1rem 0;
+}
+
+[data-theme='dark'] .hero {
+  background: linear-gradient(
+    135deg,
+    rgba(123, 159, 176, 0.1) 0%,
+    rgba(152, 185, 199, 0.1) 100%
+  );
+}

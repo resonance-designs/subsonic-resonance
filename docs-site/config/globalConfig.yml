@@ -1,0 +1,51 @@
+# Pre-build configuration settings
+preBuild:
+  # Project root directory, relative to the project root directory
+  projectRoot: ../
+  overwriteExistingFiles: true
+  copyMarkdownFromProjectRoot: false
+  generateNavBarForPages: false
+  defaultTheme: agent
+
+site:
+  title: Resonance
+  tagline: A unified OpenSubsonic streaming client
+  url: https://resonance-designs.github.io
+  baseUrl: /
+  organizationName: resonance-designs
+  projectName: subsonic-resonance
+
+theme:
+  navbar:
+    title: Resonance
+    logo:
+      alt: Resonance
+      src: img/logo.svg
+
+features:
+  giscusComments: false
+  gitHubLinks: true
+  navBarLinks: false
+  badges: false
+  themeSwitcher: true
+  textSizeSwitcher: true
+  readerMode: true
+  versionDisplay: true
+  cvPage: false
+  portfolioPage: false
+  portfolioPageAsIndex: false
+  projectsPage: false
+  dataCaching: true
+  adminUI: false
+
+# Configure HTTP sources (served by local API)
+projectsPage:
+  #source: http://localhost:4000/api/v1/projects
+  source: https://the-running-dev.github.io/Data/portfolio/projects.json
+
+portfolioPage:
+  #source: http://localhost:4000/api/v1/portfolioData
+  source: https://the-running-dev.github.io/Data/portfolio/portfolioData.json
+
+cvPage:
+  source: https://the-running-dev.github.io/Data/portfolio/cvData.json

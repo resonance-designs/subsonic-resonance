@@ -1,0 +1,261 @@
+# ====================================================================
+# CONTINUOUS INTEGRATION (CI) WORKFLOW
+# ====================================================================
+#
+# Purpose: Automated code validation workflow that runs on pull requests
+#          and feature branch pushes to ensure code quality and prevent
+#          broken code from being merged into the main branch.
+#
+# This workflow is responsible for:
+# - Validating TypeScript compilation and build process
+# - Running Docusaurus build to catch issues early
+# - TypeScript type checking for components and configuration
+# - Providing fast feedback to developers during development
+# - Ensuring code quality before merge to main branch
+#
+# ====================================================================
+# WORKFLOW STRATEGY
+# ====================================================================
+#
+# CI vs Release Workflow Separation:
+# - CI WORKFLOW (this file): Validates changes, builds for validation, no artifacts
+# - RELEASE WORKFLOW: Production builds, publishes artifacts, creates releases
+#
+# Benefits of this approach:
+# - Fast feedback loop for developers
+# - Resource efficiency (no unnecessary publishing)
+# - Clear separation of concerns
+# - Reduced risk of accidental production deployments
+#
+# ====================================================================
+# TRIGGERS & CONDITIONS
+# ====================================================================
+#
+# This workflow runs on:
+# 1. PULL REQUESTS: All PR events (opened, synchronized, etc.)
+# 2. FEATURE BRANCH PUSHES: Any branch except main
+# 3. MANUAL TRIGGER: Manual execution via workflow_dispatch
+#
+# Path Exclusions (workflow will NOT run if only these paths change):
+# - documentation/** : Documentation-only changes don't need validation
+# - .github/**       : Workflow changes don't need code validation
+#
+# Branch Exclusions:
+# - main branch pushes are handled by the Release workflow
+#
+# ====================================================================
+# BUILD ENVIRONMENT
+# ====================================================================
+#
+# Runner: GitHub-hosted Ubuntu Latest
+# Node.js: Latest LTS version for Docusaurus 3.8.1 compatibility
+# Package Manager: pnpm (via custom build agent container)
+# Container: Custom build agent with pre-installed tools
+#
+# Project Structure:
+# - Docusaurus 3.8.1 documentation site with TypeScript
+# - React 19 with modern TypeScript support
+# - FontAwesome integration for badge components
+# - Custom GitHubProjectBadges component with JSON configuration
+# - Automated versioning system (YYYY.MM.DD)
+#
+# ====================================================================
+
+name: CI
+
+# ====================================================================
+# WORKFLOW TRIGGERS
+# ====================================================================
+on:
+  # Manual trigger for testing or debugging CI process
+  # Usage: Go to Actions tab > CI workflow > Run workflow
+  workflow_dispatch:
+  
+  # Trigger on all pull request events (opened, synchronized, reopened, etc.)
+  pull_request:
+    # Skip CI if only workflow files changed
+    paths-ignore:
+      - '.github/**'
+
+# ====================================================================
+# SECURITY PERMISSIONS
+# ====================================================================
+# Minimal required permissions following principle of least privilege
+permissions:
+  contents: read  # Read repository contents
+
+# ====================================================================
+# CONCURRENCY CONTROL
+# ====================================================================
+# Prevent multiple CI runs from executing simultaneously to avoid conflicts
+# and reduce resource usage. Cancel in-progress runs when new commits are pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ====================================================================
+# JOBS CONFIGURATION
+# ====================================================================
+jobs:
+  build-and-lint:
+    name: Build and Lint
+    runs-on: ubuntu-latest
+
+    # Use custom build agent container for consistent build environment
+    # This container includes Node.js, pnpm, and documentation build tools
+    # Image: ghcr.io/the-running-dev/build-agent:latest
+    container:
+      image: ghcr.io/the-running-dev/build-agent:latest
+    
+    # ================================================================
+    # EXECUTION CONDITIONS
+    # ================================================================
+    # Explicit condition check to ensure workflow runs only when intended
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref != 'refs/heads/main')
+
+    steps:
+      # ================================================================
+      # STEP 0: DUPLICATE RUN PREVENTION
+      # ================================================================
+      # Ensures only one CI run completes for each commit, cancelling duplicates
+      # This is a safety net in case multiple triggers fire simultaneously
+      - name: Skip Duplicate Actions
+        uses: fkirc/skip-duplicate-actions@v5
+        with:
+          cancel_others: true
+          skip_after_successful_duplicate: true
+
+      # ================================================================
+      # STEP 1: REPOSITORY CHECKOUT
+      # ================================================================
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch complete git history for proper README processing
+          fetch-depth: 0
+
+      # ================================================================
+      # STEP 2: INSTALL DEPENDENCIES
+      # ================================================================
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ================================================================
+      # STEP 3: CODE CHECK
+      # ================================================================
+      - name: Check Code Formatting
+        run: pnpm run quality-ci
+
+      # ================================================================
+      # STEP 4: BUILD DOCUSAURUS SITE
+      # ================================================================
+      - name: Build Docusaurus Site
+        run: pnpm run build:prod
+        env:
+          # Ensure proper environment for build
+          NODE_ENV: production
+
+# ====================================================================
+# VALIDATION PROCESS
+# ====================================================================
+#
+# The build and lint process performs the following validations:
+# 1. Code formatting validation using Prettier
+# 2. Code quality validation using ESLint with TypeScript support
+# 3. TypeScript compilation for all components and configuration
+# 4. Docusaurus build process validation (including MDX processing)
+# 5. React component validation (GitHubProjectBadges, ReadmeContent)
+# 6. JSON configuration validation (badge-config.json)
+# 7. Version generation and README processing scripts
+#
+# Success Criteria:
+# - All dependencies install correctly via pnpm
+# - TypeScript files compile without errors
+# - Docusaurus production build completes successfully
+# - All React components render without errors
+# - Badge configuration JSON is valid and loadable
+# - Automatic versioning scripts execute successfully
+#
+# Build Artifacts Validated:
+# - build/ directory with compiled Docusaurus site
+# - Automated version generation (YYYY.MM.DD) in memory
+# - Processed README content component
+# - FontAwesome icon integration
+# - Badge system with template variable replacement
+#
+# ====================================================================
+# DEVELOPMENT WORKFLOW INTEGRATION
+# ====================================================================
+#
+# This CI workflow integrates with the Docusaurus development process:
+#
+# Feature Development Flow:
+# 1. Developer creates feature branch → CI validates on push
+# 2. Developer opens pull request → CI validates PR changes
+# 3. Code review process with CI validation results
+# 4. PR merge to main → Release workflow takes over
+#
+# Benefits for Developers:
+# - Fast feedback on Docusaurus build issues (2-3 minutes typical)
+# - Early detection of TypeScript and React component errors
+# - Validation of badge configuration and template variables
+# - Consistent build environment matching production
+#
+# ====================================================================
+# TROUBLESHOOTING GUIDE
+# ====================================================================
+#
+# Common Issues and Solutions:
+#
+# 1. TypeScript Compilation Errors:
+#    - Check syntax errors in React components (.tsx files)
+#    - Verify import statements and module dependencies
+#    - Ensure React 19 and TypeScript compatibility
+#    - Review tsconfig.json configuration
+#
+# 2. Docusaurus Build Failures:
+#    - Check docusaurus.config.ts for syntax errors
+#    - Verify MDX files in docs/ directory are valid
+#    - Review sidebar configuration in sidebars.ts
+#    - Ensure all image references in static/img/ exist
+#
+# 3. Dependency Issues:
+#    - Check pnpm-lock.yaml exists and is not corrupted
+#    - Verify package.json dependencies are compatible
+#    - Review FontAwesome and React version conflicts
+#    - Ensure Node.js version compatibility (18+)
+#    - Check pnpm version compatibility with project
+#
+# 4. Component Build Failures:
+#    - Review GitHubProjectBadges component implementation
+#    - Check badge-config.json syntax and structure
+#    - Verify FontAwesome icon imports are correct
+#    - Ensure template variable replacement logic works
+#
+# 5. Script Execution Issues:
+#    - Verify copy-readme.js script processing
+#    - Ensure ReadmeContent component generation
+#
+# ====================================================================
+# PERFORMANCE OPTIMIZATION
+# ====================================================================
+#
+# This workflow is optimized for:
+# - Fast Docusaurus builds with pnpm caching
+# - Efficient TypeScript compilation
+# - Minimal resource consumption for PR validation
+# - Quick feedback loop for documentation changes
+#
+# Performance Monitoring:
+# - Typical run time: 2-3 minutes (TypeScript + Docusaurus build)
+# - Resource usage: Low to Medium (Node.js compilation)
+# - Success rate: Monitor for build failures across branches
+#
+# Docusaurus-Specific Optimizations:
+# - Production build configuration for validation
+# - pnpm dependency caching and frozen lockfile
+# - Parallel TypeScript compilation
+# - Efficient MDX processing
+# - Custom build agent with pre-installed tools
+#
+# ====================================================================

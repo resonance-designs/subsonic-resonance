@@ -1,0 +1,120 @@
+/**
+ * @theme-id: purple
+ * @theme-name: Purple Night
+ * Purple Night Theme - Custom CSS for Docusaurus
+ * A modern purple color palette with deep purples and bright accents
+ * Features rich purples for light mode and vibrant violets for dark mode
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: #673ab7;
+  --ifm-color-primary-dark: #5e35b1;
+  --ifm-color-primary-darker: #512da8;
+  --ifm-color-primary-darkest: #4527a0;
+  --ifm-color-primary-light: #7e57c2;
+  --ifm-color-primary-lighter: #9575cd;
+  --ifm-color-primary-lightest: #b39ddb;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(103, 58, 183, 0.1);
+
+  /* Text and content colors for purple theme */
+  --ifm-font-color-base: #4c1d95;
+  --ifm-font-color-secondary: #5b21b6;
+  --ifm-color-content-secondary: #7c3aed;
+  --ifm-heading-color: #4c1d95;
+
+  /* Link colors */
+  --ifm-link-color: #673ab7;
+  --ifm-link-hover-color: #5e35b1;
+
+  /* Background enhancements */
+  --ifm-background-color: #faf5ff;
+  --ifm-background-surface-color: #ffffff;
+  --ifm-color-emphasis-100: #f3e8ff;
+  --ifm-color-emphasis-200: #e9d5ff;
+  --ifm-color-emphasis-300: #d8b4fe;
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  --ifm-color-primary: #b39ddb;
+  --ifm-color-primary-dark: #9575cd;
+  --ifm-color-primary-darker: #7e57c2;
+  --ifm-color-primary-darkest: #673ab7;
+  --ifm-color-primary-light: #d1c4e9;
+  --ifm-color-primary-lighter: #e1bee7;
+  --ifm-color-primary-lightest: #f3e5f5;
+  --docusaurus-highlighted-code-line-bg: rgba(179, 157, 219, 0.3);
+
+  /* Dark mode text and content colors */
+  --ifm-font-color-base: #e9d5ff;
+  --ifm-font-color-secondary: #d8b4fe;
+  --ifm-color-content-secondary: #c4b5fd;
+  --ifm-heading-color: #f3e8ff;
+
+  /* Dark mode link colors */
+  --ifm-link-color: #d1c4e9;
+  --ifm-link-hover-color: #e1bee7;
+
+  /* Dark mode background enhancements */
+  --ifm-background-color: #1e1b3a;
+  --ifm-background-surface-color: #2e1065;
+  --ifm-color-emphasis-100: #2e1065;
+  --ifm-color-emphasis-200: #4c1d95;
+  --ifm-color-emphasis-300: #6b21a8;
+}
+
+.hero__title {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* Purple theme specific enhancements */
+.navbar {
+  box-shadow: 0 2px 4px rgba(103, 58, 183, 0.1);
+}
+
+.card {
+  border: 1px solid rgba(103, 58, 183, 0.1);
+}
+
+[data-theme='dark'] .card {
+  border: 1px solid rgba(179, 157, 219, 0.2);
+}
+
+/* Add mystical gradient background */
+.hero {
+  background: linear-gradient(
+    135deg,
+    rgba(103, 58, 183, 0.05) 0%,
+    rgba(156, 39, 176, 0.05) 100%
+  );
+  padding: 1rem 0;
+}
+
+[data-theme='dark'] .hero {
+  background: linear-gradient(
+    135deg,
+    rgba(179, 157, 219, 0.1) 0%,
+    rgba(186, 104, 200, 0.1) 100%
+  );
+}
+
+/* Custom button styles for purple theme */
+.button--primary {
+  background: linear-gradient(
+    45deg,
+    var(--ifm-color-primary),
+    var(--ifm-color-primary-light)
+  );
+}
+
+.button--primary:hover {
+  background: linear-gradient(
+    45deg,
+    var(--ifm-color-primary-dark),
+    var(--ifm-color-primary)
+  );
+}

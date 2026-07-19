@@ -1,0 +1,6 @@
+version: '0.1.1'
+href: 'https://github.com/resonance-designs/subsonic-resonance/releases'
+prefix: 'v'
+badge: true
+className: ''
+title: 'View release notes and changelog'

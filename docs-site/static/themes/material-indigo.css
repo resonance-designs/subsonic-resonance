@@ -1,0 +1,72 @@
+/**
+ * @theme-id: material-indigo
+ * @theme-name: Material Indigo
+ * Material Indigo Theme - Custom CSS for Docusaurus
+ * A sophisticated indigo color palette inspired by Material Design
+ * Features deep indigos for light mode and bright indigo-blues for dark mode
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: #3f51b5;
+  --ifm-color-primary-dark: #303f9f;
+  --ifm-color-primary-darker: #283593;
+  --ifm-color-primary-darkest: #1a237e;
+  --ifm-color-primary-light: #5c6bc0;
+  --ifm-color-primary-lighter: #7986cb;
+  --ifm-color-primary-lightest: #9fa8da;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(63, 81, 181, 0.1);
+
+  /* Text and content colors for material indigo theme */
+  --ifm-font-color-base: #212121;
+  --ifm-font-color-secondary: #424242;
+  --ifm-color-content-secondary: #616161;
+  --ifm-heading-color: #1a1a1a;
+
+  /* Link colors */
+  --ifm-link-color: #3f51b5;
+  --ifm-link-hover-color: #303f9f;
+
+  /* Background enhancements */
+  --ifm-background-color: #fafafa;
+  --ifm-background-surface-color: #ffffff;
+  --ifm-color-emphasis-100: #e8eaf6;
+  --ifm-color-emphasis-200: #c5cae9;
+  --ifm-color-emphasis-300: #9fa8da;
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  --ifm-color-primary: #7986cb;
+  --ifm-color-primary-dark: #5c6bc0;
+  --ifm-color-primary-darker: #3f51b5;
+  --ifm-color-primary-darkest: #303f9f;
+  --ifm-color-primary-light: #9fa8da;
+  --ifm-color-primary-lighter: #c5cae9;
+  --ifm-color-primary-lightest: #e8eaf6;
+  --docusaurus-highlighted-code-line-bg: rgba(121, 134, 203, 0.3);
+
+  /* Dark mode text and content colors */
+  --ifm-font-color-base: #fafafa;
+  --ifm-font-color-secondary: #f5f5f5;
+  --ifm-color-content-secondary: #e0e0e0;
+  --ifm-heading-color: #ffffff;
+
+  /* Dark mode link colors */
+  --ifm-link-color: #9fa8da;
+  --ifm-link-hover-color: #c5cae9;
+
+  /* Dark mode background enhancements */
+  --ifm-background-color: #121212;
+  --ifm-background-surface-color: #1e1e1e;
+  --ifm-color-emphasis-100: #1c1e2e;
+  --ifm-color-emphasis-200: #26293d;
+  --ifm-color-emphasis-300: #2f334c;
+}
+
+.hero__title {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+}

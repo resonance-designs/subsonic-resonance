@@ -7,3 +7,5 @@ crates/desktop/gen
 .idea/
 .vscode/
 
+node_modules
+/artifacts/

@@ -1,0 +1,333 @@
+/**
+ * @theme-id: sunset
+ * @theme-name: Sunset
+ * Sunset Theme - Custom CSS for Docusaurus
+ * A warm sunset color palette with vibrant oranges and deep reds
+ * Features rich sunset colors for light mode and warm amber tones for dark mode
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  /* Primary sunset palette */
+  --ifm-color-primary: #ff5722;
+  --ifm-color-primary-dark: #f4511e;
+  --ifm-color-primary-darker: #e64a19;
+  --ifm-color-primary-darkest: #d84315;
+  --ifm-color-primary-light: #ff7043;
+  --ifm-color-primary-lighter: #ff8a65;
+  --ifm-color-primary-lightest: #ffab91;
+
+  /* Typography enhancements */
+  --ifm-font-family-base:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --ifm-font-family-monospace:
+    'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  --ifm-code-font-size: 0.875rem;
+  --ifm-font-size-base: 16px;
+  --ifm-line-height-base: 1.6;
+
+  /* Elegant spacing and borders */
+  --ifm-global-radius: 8px;
+  --ifm-button-border-radius: 6px;
+  --ifm-code-border-radius: 4px;
+  --ifm-global-spacing: 1rem;
+
+  /* Professional shadows with sunset tones */
+  --ifm-global-shadow-lw:
+    0 2px 6px rgba(255, 87, 34, 0.15), 0 1px 3px rgba(255, 87, 34, 0.08);
+  --ifm-global-shadow-md:
+    0 6px 16px rgba(255, 87, 34, 0.18), 0 3px 8px rgba(255, 87, 34, 0.12);
+  --ifm-global-shadow-tl:
+    0 12px 32px rgba(255, 87, 34, 0.22), 0 6px 16px rgba(255, 87, 34, 0.16);
+  --ifm-global-shadow-xl:
+    0 20px 48px rgba(255, 87, 34, 0.25), 0 8px 20px rgba(255, 87, 34, 0.18);
+
+  /* Enhanced background colors */
+  --ifm-background-color: #fff8f5;
+  --ifm-background-surface-color: #ffffff;
+  --ifm-hover-overlay: rgba(255, 87, 34, 0.06);
+
+  /* Code highlighting */
+  --docusaurus-highlighted-code-line-bg: rgba(255, 87, 34, 0.1);
+  --ifm-code-background: rgba(255, 87, 34, 0.08);
+
+  /* Accent colors */
+  --ifm-color-success: #16a34a;
+  --ifm-color-info: #0891b2;
+  --ifm-color-warning: #dc6b02;
+  --ifm-color-danger: #dc2626;
+
+  /* Text colors */
+  --ifm-color-emphasis-900: #7c2d12;
+  --ifm-color-emphasis-800: #9a3412;
+  --ifm-color-emphasis-700: #c2410c;
+  --ifm-color-emphasis-600: #ea580c;
+  --ifm-font-color-base: #7c2d12;
+  --ifm-font-color-secondary: #9a3412;
+  --ifm-color-content-secondary: #c2410c;
+  --ifm-heading-color: #7c2d12;
+
+  /* Link colors */
+  --ifm-link-color: #ff5722;
+  --ifm-link-hover-color: #f4511e;
+
+  /* Color emphasis overrides */
+  --ifm-color-emphasis-100: #fed7d7;
+  --ifm-color-emphasis-200: #feb2b2;
+  --ifm-color-emphasis-300: #fc8181;
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  /* Dark mode sunset palette */
+  --ifm-color-primary: #ffab91;
+  --ifm-color-primary-dark: #ff8a65;
+  --ifm-color-primary-darker: #ff7043;
+  --ifm-color-primary-darkest: #ff5722;
+  --ifm-color-primary-light: #ffccbc;
+  --ifm-color-primary-lighter: #ffe0cc;
+  --ifm-color-primary-lightest: #fff3e0;
+
+  /* Darker backgrounds */
+  --ifm-background-color: #1a0e0a;
+  --ifm-background-surface-color: #2d1b14;
+  --ifm-hover-overlay: rgba(255, 171, 145, 0.1);
+
+  /* Dark mode code styling */
+  --docusaurus-highlighted-code-line-bg: rgba(255, 171, 145, 0.15);
+  --ifm-code-background: rgba(255, 171, 145, 0.1);
+
+  /* Enhanced dark mode shadows */
+  --ifm-global-shadow-lw:
+    0 2px 6px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+  --ifm-global-shadow-md:
+    0 6px 16px rgba(0, 0, 0, 0.4), 0 3px 8px rgba(0, 0, 0, 0.25);
+  --ifm-global-shadow-tl:
+    0 12px 32px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.3);
+  --ifm-global-shadow-xl:
+    0 20px 48px rgba(0, 0, 0, 0.6), 0 8px 20px rgba(0, 0, 0, 0.35);
+
+  /* Dark mode text colors */
+  --ifm-font-color-base: #fed7d7;
+  --ifm-font-color-secondary: #fbb6b6;
+  --ifm-color-content-secondary: #f98080;
+  --ifm-heading-color: #fed7d7;
+  --ifm-color-emphasis-800: #fbb6b6;
+  --ifm-color-emphasis-700: #f98080;
+  --ifm-color-emphasis-600: #f56565;
+
+  /* Dark mode link colors */
+  --ifm-link-color: #ffab91;
+  --ifm-link-hover-color: #ffccbc;
+
+  /* Dark mode color emphasis */
+  --ifm-color-emphasis-100: #2d1b14;
+  --ifm-color-emphasis-200: #3d2618;
+  --ifm-color-emphasis-300: #4c2f1c;
+}
+
+/* Enhanced typography and hero styling */
+.hero__title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  background: linear-gradient(
+    135deg,
+    var(--ifm-color-primary-dark),
+    var(--ifm-color-primary-light)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 1rem;
+}
+
+.hero__subtitle {
+  font-size: 1.25rem;
+  font-weight: 400;
+  opacity: 0.8;
+  margin-bottom: 2rem;
+  line-height: 1.5;
+}
+
+/* Enhanced hero section */
+.hero {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 87, 34, 0.06) 0%,
+    rgba(255, 87, 34, 0.12) 50%,
+    rgba(255, 87, 34, 0.06) 100%
+  );
+  border-bottom: 1px solid rgba(255, 87, 34, 0.15);
+  padding: 1rem 0;
+  position: relative;
+}
+
+[data-theme='dark'] .hero {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 171, 145, 0.08) 0%,
+    rgba(255, 171, 145, 0.15) 50%,
+    rgba(255, 171, 145, 0.08) 100%
+  );
+  border-bottom: 1px solid rgba(255, 171, 145, 0.2);
+}
+
+/* Enhanced navbar */
+.navbar {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 87, 34, 0.12);
+  box-shadow: var(--ifm-global-shadow-md);
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+[data-theme='dark'] .navbar {
+  background: rgba(26, 14, 10, 0.95);
+  border-bottom: 1px solid rgba(255, 171, 145, 0.15);
+  box-shadow: var(--ifm-global-shadow-tl);
+}
+
+/* Enhanced buttons */
+.button {
+  border-radius: var(--ifm-button-border-radius);
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--ifm-global-shadow-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ifm-global-shadow-xl);
+}
+
+/* Enhanced cards */
+.card {
+  border-radius: var(--ifm-global-radius);
+  box-shadow: var(--ifm-global-shadow-md);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255, 87, 34, 0.1);
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--ifm-global-shadow-xl);
+}
+
+[data-theme='dark'] .card {
+  border: 1px solid rgba(255, 171, 145, 0.2);
+}
+
+/* Enhanced sidebar */
+.menu__link {
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+  margin: 2px 0;
+}
+
+.menu__link:hover {
+  background: var(--ifm-hover-overlay);
+  transform: translateX(4px);
+}
+
+.menu__link--active {
+  background: rgba(255, 87, 34, 0.08);
+  color: var(--ifm-color-primary-dark);
+  font-weight: 600;
+}
+
+[data-theme='dark'] .menu__link--active {
+  background: rgba(255, 171, 145, 0.15);
+  color: var(--ifm-color-primary-light);
+}
+
+/* Enhanced footer */
+.footer {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 87, 34, 0.04) 0%,
+    rgba(255, 87, 34, 0.08) 100%
+  );
+  border-top: 1px solid rgba(255, 87, 34, 0.15);
+  position: relative;
+}
+
+[data-theme='dark'] .footer {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 171, 145, 0.06) 0%,
+    rgba(255, 171, 145, 0.12) 100%
+  );
+  border-top: 1px solid rgba(255, 171, 145, 0.2);
+}
+
+/* Enhanced link styling - override hardcoded values */
+a {
+  color: var(--ifm-link-color) !important;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--ifm-link-hover-color) !important;
+}
+
+/* Enhanced navbar link colors */
+.navbar__link {
+  color: var(--ifm-font-color-base) !important;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.navbar__link:hover {
+  color: var(--ifm-link-color) !important;
+}
+
+/* Active navbar link */
+.navbar__item--active .navbar__link,
+.navbar__link--active {
+  color: var(--ifm-link-color) !important;
+  font-weight: 600;
+}
+
+.hero__title {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* Sunset theme specific enhancements */
+.navbar {
+  box-shadow: 0 2px 4px rgba(255, 87, 34, 0.1);
+}
+
+.card {
+  border: 1px solid rgba(255, 87, 34, 0.1);
+}
+
+[data-theme='dark'] .card {
+  border: 1px solid rgba(255, 138, 101, 0.2);
+}
+
+/* Add warm gradient background for hero section */
+.hero {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 87, 34, 0.05) 0%,
+    rgba(255, 183, 77, 0.05) 100%
+  );
+}
+
+[data-theme='dark'] .hero {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 138, 101, 0.1) 0%,
+    rgba(255, 183, 77, 0.1) 100%
+  );
+}

@@ -1,0 +1,296 @@
+/**
+ * @theme-id: blue
+ * @theme-name: Ocean Blue
+ * Blue Ocean Theme - Custom CSS for Docusaurus
+ * A professional blue color palette inspired by ocean depths
+ * Features deep blues for light mode and vibrant cyan-blues for dark mode
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  /* Primary blue palette */
+  --ifm-color-primary: #1976d2;
+  --ifm-color-primary-dark: #1565c0;
+  --ifm-color-primary-darker: #1460aa;
+  --ifm-color-primary-darkest: #0d47a1;
+  --ifm-color-primary-light: #1e88e5;
+  --ifm-color-primary-lighter: #2196f3;
+  --ifm-color-primary-lightest: #42a5f5;
+
+  /* Typography enhancements */
+  --ifm-font-family-base:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --ifm-font-family-monospace:
+    'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  --ifm-code-font-size: 0.875rem;
+  --ifm-font-size-base: 16px;
+  --ifm-line-height-base: 1.6;
+
+  /* Elegant spacing and borders */
+  --ifm-global-radius: 8px;
+  --ifm-button-border-radius: 6px;
+  --ifm-code-border-radius: 4px;
+  --ifm-global-spacing: 1rem;
+
+  /* Professional shadows with blue tones */
+  --ifm-global-shadow-lw:
+    0 2px 6px rgba(25, 118, 210, 0.15), 0 1px 3px rgba(25, 118, 210, 0.08);
+  --ifm-global-shadow-md:
+    0 6px 16px rgba(25, 118, 210, 0.18), 0 3px 8px rgba(25, 118, 210, 0.12);
+  --ifm-global-shadow-tl:
+    0 12px 32px rgba(25, 118, 210, 0.22), 0 6px 16px rgba(25, 118, 210, 0.16);
+  --ifm-global-shadow-xl:
+    0 20px 48px rgba(25, 118, 210, 0.25), 0 8px 20px rgba(25, 118, 210, 0.18);
+
+  /* Enhanced background colors */
+  --ifm-background-color: #f7fafc;
+  --ifm-background-surface-color: #ffffff;
+  --ifm-hover-overlay: rgba(25, 118, 210, 0.06);
+
+  /* Code highlighting */
+  --docusaurus-highlighted-code-line-bg: rgba(25, 118, 210, 0.1);
+  --ifm-code-background: rgba(25, 118, 210, 0.08);
+
+  /* Accent colors */
+  --ifm-color-success: #16a34a;
+  --ifm-color-info: #0891b2;
+  --ifm-color-warning: #dc6b02;
+  --ifm-color-danger: #dc2626;
+
+  /* Text colors */
+  --ifm-color-emphasis-900: #1a365d;
+  --ifm-color-emphasis-800: #2c5282;
+  --ifm-color-emphasis-700: #3182ce;
+  --ifm-color-emphasis-600: #4299e1;
+  --ifm-font-color-base: #1a365d;
+  --ifm-font-color-secondary: #2c5282;
+  --ifm-color-content-secondary: #3182ce;
+  --ifm-heading-color: #1a365d;
+
+  /* Link colors */
+  --ifm-link-color: #1976d2;
+  --ifm-link-hover-color: #1565c0;
+
+  /* Color emphasis overrides */
+  --ifm-color-emphasis-100: #ebf8ff;
+  --ifm-color-emphasis-200: #bee3f8;
+  --ifm-color-emphasis-300: #90cdf4;
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  /* Dark mode blue palette */
+  --ifm-color-primary: #64b5f6;
+  --ifm-color-primary-dark: #42a5f5;
+  --ifm-color-primary-darker: #2196f3;
+  --ifm-color-primary-darkest: #1e88e5;
+  --ifm-color-primary-light: #90caf9;
+  --ifm-color-primary-lighter: #bbdefb;
+  --ifm-color-primary-lightest: #e3f2fd;
+
+  /* Darker backgrounds */
+  --ifm-background-color: #0a1628;
+  --ifm-background-surface-color: #1a365d;
+  --ifm-hover-overlay: rgba(100, 181, 246, 0.1);
+
+  /* Dark mode code styling */
+  --docusaurus-highlighted-code-line-bg: rgba(100, 181, 246, 0.15);
+  --ifm-code-background: rgba(100, 181, 246, 0.1);
+
+  /* Enhanced dark mode shadows */
+  --ifm-global-shadow-lw:
+    0 2px 6px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+  --ifm-global-shadow-md:
+    0 6px 16px rgba(0, 0, 0, 0.4), 0 3px 8px rgba(0, 0, 0, 0.25);
+  --ifm-global-shadow-tl:
+    0 12px 32px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.3);
+  --ifm-global-shadow-xl:
+    0 20px 48px rgba(0, 0, 0, 0.6), 0 8px 20px rgba(0, 0, 0, 0.35);
+
+  /* Dark mode text colors */
+  --ifm-font-color-base: #e2e8f0;
+  --ifm-font-color-secondary: #cbd5e0;
+  --ifm-color-content-secondary: #a0aec0;
+  --ifm-heading-color: #f7fafc;
+  --ifm-color-emphasis-800: #cbd5e0;
+  --ifm-color-emphasis-700: #a0aec0;
+  --ifm-color-emphasis-600: #718096;
+
+  /* Dark mode link colors */
+  --ifm-link-color: #90caf9;
+  --ifm-link-hover-color: #bbdefb;
+
+  /* Dark mode color emphasis */
+  --ifm-color-emphasis-100: #1a365d;
+  --ifm-color-emphasis-200: #2c5282;
+  --ifm-color-emphasis-300: #3182ce;
+}
+
+/* Enhanced typography and hero styling */
+.hero__title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  background: linear-gradient(
+    135deg,
+    var(--ifm-color-primary-dark),
+    var(--ifm-color-primary-light)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 1rem;
+}
+
+.hero__subtitle {
+  font-size: 1.25rem;
+  font-weight: 400;
+  opacity: 0.8;
+  margin-bottom: 2rem;
+  line-height: 1.5;
+}
+
+/* Enhanced hero section */
+.hero {
+  background: linear-gradient(
+    135deg,
+    rgba(25, 118, 210, 0.06) 0%,
+    rgba(25, 118, 210, 0.12) 50%,
+    rgba(25, 118, 210, 0.06) 100%
+  );
+  border-bottom: 1px solid rgba(25, 118, 210, 0.15);
+  padding: 1rem 0;
+}
+
+[data-theme='dark'] .hero {
+  background: linear-gradient(
+    135deg,
+    rgba(100, 181, 246, 0.08) 0%,
+    rgba(100, 181, 246, 0.15) 50%,
+    rgba(100, 181, 246, 0.08) 100%
+  );
+  border-bottom: 1px solid rgba(100, 181, 246, 0.2);
+}
+
+/* Enhanced navbar */
+.navbar {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(25, 118, 210, 0.12);
+  box-shadow: var(--ifm-global-shadow-md);
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+[data-theme='dark'] .navbar {
+  background: rgba(10, 22, 40, 0.95);
+  border-bottom: 1px solid rgba(100, 181, 246, 0.15);
+  box-shadow: var(--ifm-global-shadow-tl);
+}
+
+/* Enhanced buttons */
+.button {
+  border-radius: var(--ifm-button-border-radius);
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--ifm-global-shadow-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ifm-global-shadow-xl);
+}
+
+/* Enhanced cards */
+.card {
+  border-radius: var(--ifm-global-radius);
+  box-shadow: var(--ifm-global-shadow-md);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(25, 118, 210, 0.1);
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--ifm-global-shadow-xl);
+}
+
+[data-theme='dark'] .card {
+  border: 1px solid rgba(100, 181, 246, 0.2);
+}
+
+/* Enhanced sidebar */
+.menu__link {
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+  margin: 2px 0;
+}
+
+.menu__link:hover {
+  background: var(--ifm-hover-overlay);
+  transform: translateX(4px);
+}
+
+.menu__link--active {
+  background: rgba(25, 118, 210, 0.08);
+  color: var(--ifm-color-primary-dark);
+  font-weight: 600;
+}
+
+[data-theme='dark'] .menu__link--active {
+  background: rgba(100, 181, 246, 0.15);
+  color: var(--ifm-color-primary-light);
+}
+
+/* Enhanced footer */
+.footer {
+  background: linear-gradient(
+    135deg,
+    rgba(25, 118, 210, 0.04) 0%,
+    rgba(25, 118, 210, 0.08) 100%
+  );
+  border-top: 1px solid rgba(25, 118, 210, 0.15);
+  position: relative;
+}
+
+[data-theme='dark'] .footer {
+  background: linear-gradient(
+    135deg,
+    rgba(100, 181, 246, 0.06) 0%,
+    rgba(100, 181, 246, 0.12) 100%
+  );
+  border-top: 1px solid rgba(100, 181, 246, 0.2);
+}
+
+/* Enhanced link styling - override hardcoded values */
+a {
+  color: var(--ifm-link-color) !important;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--ifm-link-hover-color) !important;
+}
+
+/* Enhanced navbar link colors */
+.navbar__link {
+  color: var(--ifm-font-color-base) !important;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.navbar__link:hover {
+  color: var(--ifm-link-color) !important;
+}
+
+/* Active navbar link */
+.navbar__item--active .navbar__link,
+.navbar__link--active {
+  color: var(--ifm-link-color) !important;
+  font-weight: 600;
+}

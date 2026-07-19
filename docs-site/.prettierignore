@@ -1,0 +1,45 @@
+# =============================================================================
+# DOCUSAURUS TEMPLATE - PRETTIER IGNORE
+# =============================================================================
+
+# Build directories
+build/
+dist/
+node_modules/
+artifacts/
+.docusaurus/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Lock files (generated, don't format)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Version control
+.git/
+
+# CI/CD and workflows
+.github/
+
+# Auto-generated files
+data/*.json

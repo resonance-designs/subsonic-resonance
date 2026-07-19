@@ -1,0 +1,12 @@
+# Ignore all temporary files
+*.tmp
+*.temp
+
+# Ignore specific files
+config.local.json
+debug.log
+
+# Ignore files in specific subdirectories
+node_modules/*
+.git/*
+*.exe

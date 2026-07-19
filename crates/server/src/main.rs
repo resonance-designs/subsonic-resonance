@@ -1,12 +1,4 @@
-use std::{
-    collections::HashMap,
-    env,
-    net::SocketAddr,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-};
+use std::{collections::HashMap, env, net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
     Json, Router,
@@ -16,7 +8,10 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get},
 };
-use resonance_core::{MusicProvider, ProviderError};
+use resonance_core::{
+    AggregateResponse, Album, AlbumDetail, LibraryAlbum, LibraryAlbumDetail, LibraryTrack, MediaId,
+    MediaKind, MusicProvider, ProviderError, ProviderId, ProviderIssue, ProviderIssueKind, Track,
+};
 use resonance_provider_subsonic::{Credentials, SubsonicClient};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
@@ -26,7 +21,6 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 struct AppState {
     providers: Arc<RwLock<HashMap<String, ProviderEntry>>>,
     http: reqwest::Client,
-    next_provider_id: Arc<AtomicU64>,
 }
 
 #[derive(Clone)]
@@ -77,7 +71,6 @@ async fn main() {
     let state = AppState {
         providers: Arc::new(RwLock::new(HashMap::new())),
         http: reqwest::Client::new(),
-        next_provider_id: Arc::new(AtomicU64::new(1)),
     };
     if let Some(entry) = provider_from_environment().await {
         state
@@ -97,6 +90,12 @@ async fn main() {
         .route("/api/providers/{provider_id}/albums", get(albums))
         .route("/api/providers/{provider_id}/albums/{album_id}", get(album))
         .route("/api/providers/{provider_id}/search", get(search))
+        .route("/api/library/albums", get(library_albums))
+        .route(
+            "/api/library/albums/{provider_id}/{album_id}",
+            get(library_album),
+        )
+        .route("/api/library/search", get(library_search))
         .route(
             "/api/providers/{provider_id}/tracks/{track_id}/stream",
             get(stream),
@@ -219,10 +218,7 @@ async fn register_provider(
             )
         }
     };
-    let id = format!(
-        "provider-{}",
-        state.next_provider_id.fetch_add(1, Ordering::Relaxed)
-    );
+    let id = uuid::Uuid::new_v4().to_string();
     let entry = build_entry(
         id.clone(),
         request.name.trim().into(),
@@ -314,6 +310,204 @@ async fn search(
     ))
 }
 
+const PROVIDER_QUERY_TIMEOUT: Duration = Duration::from_secs(20);
+
+fn qualified_id(provider_id: &str, kind: MediaKind, item_id: String) -> MediaId {
+    MediaId::new(ProviderId::new(provider_id), kind, item_id)
+}
+
+fn qualify_album(summary: &ProviderSummary, album: Album) -> LibraryAlbum {
+    LibraryAlbum {
+        id: qualified_id(&summary.id, MediaKind::Album, album.id),
+        name: album.name,
+        artist: album.artist,
+        artist_id: album
+            .artist_id
+            .map(|id| qualified_id(&summary.id, MediaKind::Artist, id)),
+        cover_art: album
+            .cover_art
+            .map(|id| qualified_id(&summary.id, MediaKind::Artwork, id)),
+        song_count: album.song_count,
+        duration_seconds: album.duration_seconds,
+        year: album.year,
+        source_name: summary.name.clone(),
+    }
+}
+
+fn qualify_track(summary: &ProviderSummary, track: Track) -> LibraryTrack {
+    LibraryTrack {
+        id: qualified_id(&summary.id, MediaKind::Track, track.id),
+        title: track.title,
+        artist: track.artist,
+        artist_id: track
+            .artist_id
+            .map(|id| qualified_id(&summary.id, MediaKind::Artist, id)),
+        album: track.album,
+        album_id: track
+            .album_id
+            .map(|id| qualified_id(&summary.id, MediaKind::Album, id)),
+        cover_art: track
+            .cover_art
+            .map(|id| qualified_id(&summary.id, MediaKind::Artwork, id)),
+        duration_seconds: track.duration_seconds,
+        track_number: track.track_number,
+        suffix: track.suffix,
+        source_name: summary.name.clone(),
+    }
+}
+
+fn provider_issue(summary: &ProviderSummary, error: ProviderError) -> ProviderIssue {
+    let (kind, retryable) = match &error {
+        ProviderError::Unauthorized => (ProviderIssueKind::Unauthorized, false),
+        ProviderError::Unavailable(_) => (ProviderIssueKind::Unavailable, true),
+        ProviderError::InvalidResponse(_) => (ProviderIssueKind::InvalidResponse, false),
+        ProviderError::Unsupported(_) => (ProviderIssueKind::Unsupported, false),
+        _ => (ProviderIssueKind::Other, false),
+    };
+    ProviderIssue {
+        provider_id: ProviderId::new(summary.id.as_str()),
+        provider_name: summary.name.clone(),
+        kind,
+        message: error.to_string(),
+        retryable,
+    }
+}
+
+fn timeout_issue(summary: &ProviderSummary) -> ProviderIssue {
+    ProviderIssue {
+        provider_id: ProviderId::new(summary.id.as_str()),
+        provider_name: summary.name.clone(),
+        kind: ProviderIssueKind::Timeout,
+        message: "provider query timed out".into(),
+        retryable: true,
+    }
+}
+
+async fn provider_entries(state: &AppState) -> Vec<ProviderEntry> {
+    state.providers.read().await.values().cloned().collect()
+}
+
+async fn library_albums(
+    State(state): State<AppState>,
+    Query(q): Query<PageQuery>,
+) -> Json<AggregateResponse<LibraryAlbum>> {
+    let limit = q.limit.unwrap_or(30).clamp(1, 500);
+    let offset = q.offset.unwrap_or(0);
+    let mut tasks = tokio::task::JoinSet::new();
+    for entry in provider_entries(&state).await {
+        tasks.spawn(async move {
+            let result = tokio::time::timeout(
+                PROVIDER_QUERY_TIMEOUT,
+                entry.client.albums(limit.saturating_add(offset), 0),
+            )
+            .await;
+            (entry.summary, result)
+        });
+    }
+
+    let mut items = Vec::new();
+    let mut issues = Vec::new();
+    while let Some(result) = tasks.join_next().await {
+        match result {
+            Ok((summary, Ok(Ok(albums)))) => {
+                items.extend(
+                    albums
+                        .into_iter()
+                        .map(|album| qualify_album(&summary, album)),
+                );
+            }
+            Ok((summary, Ok(Err(error)))) => issues.push(provider_issue(&summary, error)),
+            Ok((summary, Err(_))) => issues.push(timeout_issue(&summary)),
+            Err(error) => tracing::warn!(%error, "library album task failed"),
+        }
+    }
+    items.sort_by(|a, b| {
+        a.name
+            .to_lowercase()
+            .cmp(&b.name.to_lowercase())
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    items = items
+        .into_iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .collect();
+    issues.sort_by(|a, b| a.provider_id.cmp(&b.provider_id));
+    Json(AggregateResponse {
+        complete: issues.is_empty(),
+        items,
+        issues,
+    })
+}
+
+async fn library_album(
+    State(state): State<AppState>,
+    Path((provider_id, album_id)): Path<(String, String)>,
+) -> Result<Json<LibraryAlbumDetail>, ApiError> {
+    let entry = state
+        .providers
+        .read()
+        .await
+        .get(&provider_id)
+        .cloned()
+        .ok_or_else(|| ApiError(ProviderError::NotFound))?;
+    let AlbumDetail { album, tracks } = entry.client.album(&album_id).await?;
+    Ok(Json(LibraryAlbumDetail {
+        album: qualify_album(&entry.summary, album),
+        tracks: tracks
+            .into_iter()
+            .map(|track| qualify_track(&entry.summary, track))
+            .collect(),
+    }))
+}
+
+async fn library_search(
+    State(state): State<AppState>,
+    Query(q): Query<SearchQuery>,
+) -> Json<AggregateResponse<LibraryTrack>> {
+    let limit = q.limit.unwrap_or(50).clamp(1, 500);
+    let mut tasks = tokio::task::JoinSet::new();
+    for entry in provider_entries(&state).await {
+        let query = q.q.clone();
+        tasks.spawn(async move {
+            let result =
+                tokio::time::timeout(PROVIDER_QUERY_TIMEOUT, entry.client.search(&query, limit))
+                    .await;
+            (entry.summary, result)
+        });
+    }
+
+    let mut items = Vec::new();
+    let mut issues = Vec::new();
+    while let Some(result) = tasks.join_next().await {
+        match result {
+            Ok((summary, Ok(Ok(tracks)))) => {
+                items.extend(
+                    tracks
+                        .into_iter()
+                        .map(|track| qualify_track(&summary, track)),
+                );
+            }
+            Ok((summary, Ok(Err(error)))) => issues.push(provider_issue(&summary, error)),
+            Ok((summary, Err(_))) => issues.push(timeout_issue(&summary)),
+            Err(error) => tracing::warn!(%error, "library search task failed"),
+        }
+    }
+    items.sort_by(|a, b| {
+        a.title
+            .to_lowercase()
+            .cmp(&b.title.to_lowercase())
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    items.truncate(limit as usize);
+    issues.sort_by(|a, b| a.provider_id.cmp(&b.provider_id));
+    Json(AggregateResponse {
+        complete: issues.is_empty(),
+        items,
+        issues,
+    })
+}
+
 async fn stream(
     State(state): State<AppState>,
     Path((provider_id, track_id)): Path<(String, String)>,
@@ -389,6 +583,7 @@ impl IntoResponse for ApiError {
             ProviderError::NotFound => StatusCode::NOT_FOUND,
             ProviderError::Unavailable(_) => StatusCode::BAD_GATEWAY,
             ProviderError::InvalidResponse(_) => StatusCode::BAD_REQUEST,
+            ProviderError::Unsupported(_) => StatusCode::NOT_IMPLEMENTED,
             _ => StatusCode::BAD_GATEWAY,
         };
         (
