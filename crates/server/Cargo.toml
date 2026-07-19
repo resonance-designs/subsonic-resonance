@@ -2,7 +2,7 @@
 name = "resonance-server"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license-file.workspace = true
 
 [dependencies]
 axum.workspace = true

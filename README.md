@@ -1,11 +1,11 @@
 # Subsonic Resonance
 
-![Static Badge](https://img.shields.io/badge/Version-0.1.2-orange)
-![Static Badge](https://img.shields.io/badge/Latest_Release-v0.1.1-green)
+![Static Badge](https://img.shields.io/badge/Version-0.1.3-orange)
+![Static Badge](https://img.shields.io/badge/Latest_Release-v0.1.3-green)
 
 Subsonic Resonance is a Windows-first, cross-platform OpenSubsonic streaming client written in Rust. It uses a shared Leptos/WebAssembly interface for the browser and Tauri desktop shell, with provider integrations behind a provider-neutral Rust API.
 
-The project is currently at `0.1.2` and under active development toward the `0.2.0` library-experience release.
+The project is currently at `0.1.3` and under active development toward the `0.2.0` library-experience release.
 
 ## Current functionality
 

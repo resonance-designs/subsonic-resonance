@@ -7,8 +7,8 @@ sidebar_position: 1
 
 # Resonance
 
-![Static Badge](https://img.shields.io/badge/Version-0.1.2-orange)
-![Static Badge](https://img.shields.io/badge/Latest_Release-v0.1.1-green)
+![Static Badge](https://img.shields.io/badge/Version-0.1.3-orange)
+![Static Badge](https://img.shields.io/badge/Latest_Release-v0.1.3-green)
 
 ## Current functionality
 

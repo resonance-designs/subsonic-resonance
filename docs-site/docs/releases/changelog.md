@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Replaced the workspace's `MIT OR Apache-2.0` declaration with an inherited proprietary `LICENSE.md` covering no-charge official binary use and separately contracted source access.
 - Increased Subsonic album discovery requests from 30 to 500 items per page, matching the API maximum while preserving bounded pagination, album-ID deduplication, and repeated-page termination safeguards.
 - Replaced documentation hero logo scaling based on raw asset dimensions with an explicit 305-pixel display size while retaining configured light and dark logo source fallbacks.
 - Removed the documentation hero wordmark's fixed pixel-size override so its dedicated responsive `rem`/viewport `clamp()` sizing remains independent from the navbar branding.
