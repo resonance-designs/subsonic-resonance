@@ -15,6 +15,13 @@ enum Page {
     Settings,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum RepeatMode {
+    Off,
+    One,
+    All,
+}
+
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Provider {
@@ -47,6 +54,29 @@ struct Album {
     song_count: Option<u32>,
     duration_seconds: Option<u64>,
     year: Option<u32>,
+    source_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Artist {
+    #[allow(dead_code)]
+    id: MediaId,
+    name: String,
+    album_count: Option<u32>,
+    cover_art: Option<MediaId>,
+    source_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Playlist {
+    id: MediaId,
+    name: String,
+    owner: Option<String>,
+    song_count: Option<u32>,
+    duration_seconds: Option<u64>,
+    cover_art: Option<MediaId>,
     source_name: String,
 }
 
@@ -134,6 +164,7 @@ async fn get_json<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String>
 async fn load_library(
     albums: RwSignal<Vec<Album>>,
     tracks: RwSignal<Vec<Track>>,
+    current: RwSignal<usize>,
     loading: RwSignal<bool>,
     issues: RwSignal<Vec<ProviderIssue>>,
     error: RwSignal<Option<String>>,
@@ -146,23 +177,16 @@ async fn load_library(
             albums.set(response.items);
             issues.set(response.issues);
             if let Some(id) = first {
-                match get_json::<AlbumDetail>(&format!(
-                    "/library/albums/{}/{}",
-                    encode(&id.provider_id),
-                    encode(&id.item_id)
-                ))
-                .await
-                {
-                    Ok(detail) => tracks.set(detail.tracks),
-                    Err(message) => error.set(Some(message)),
-                }
+                load_album_tracks(id, tracks, current, loading, error).await;
             } else {
                 tracks.set(Vec::new());
+                current.set(0);
             }
         }
         Err(message) => {
             albums.set(Vec::new());
             tracks.set(Vec::new());
+            current.set(0);
             issues.set(Vec::new());
             error.set(Some(message));
         }
@@ -264,7 +288,7 @@ fn format_duration(seconds: Option<u64>) -> String {
         .unwrap_or_else(|| "—".into())
 }
 
-fn load_album_tracks(
+async fn load_album_tracks(
     id: MediaId,
     tracks: RwSignal<Vec<Track>>,
     current: RwSignal<usize>,
@@ -273,22 +297,20 @@ fn load_album_tracks(
 ) {
     loading.set(true);
     error.set(None);
-    spawn_local(async move {
-        match get_json::<AlbumDetail>(&format!(
-            "/library/albums/{}/{}",
-            encode(&id.provider_id),
-            encode(&id.item_id)
-        ))
-        .await
-        {
-            Ok(detail) => {
-                tracks.set(detail.tracks);
-                current.set(0);
-            }
-            Err(message) => error.set(Some(message)),
+    match get_json::<AlbumDetail>(&format!(
+        "/library/albums/{}/{}",
+        encode(&id.provider_id),
+        encode(&id.item_id)
+    ))
+    .await
+    {
+        Ok(detail) => {
+            tracks.set(detail.tracks);
+            current.set(0);
         }
-        loading.set(false);
-    });
+        Err(message) => error.set(Some(message)),
+    }
+    loading.set(false);
 }
 
 #[component]
@@ -306,8 +328,18 @@ fn ProviderNotices(issues: RwSignal<Vec<ProviderIssue>>) -> impl IntoView {
 }
 
 #[component]
+fn SourceFilter(providers: RwSignal<Vec<Provider>>, selected: RwSignal<String>) -> impl IntoView {
+    view! {
+        <label class="source-filter"><span>"Source"</span><select on:change=move |event| selected.set(event_target_value(&event))>
+            <option value="">"All sources"</option>
+            {move || providers.get().into_iter().map(|provider| view! {<option value=provider.id>{provider.name}</option>}).collect_view()}
+        </select></label>
+    }
+}
+
+#[component]
 fn TrackResults(
-    items: RwSignal<Vec<Track>>,
+    #[prop(into)] items: Signal<Vec<Track>>,
     queue: RwSignal<Vec<Track>>,
     current: RwSignal<usize>,
     playing: RwSignal<bool>,
@@ -352,6 +384,7 @@ fn AlbumsPage(
 ) -> impl IntoView {
     let filter = RwSignal::new(String::new());
     let sort = RwSignal::new(String::from("title"));
+    let source = RwSignal::new(String::new());
     let selected = RwSignal::new(None::<MediaId>);
     let visible_albums = move || {
         let needle = filter.get().trim().to_lowercase();
@@ -367,6 +400,10 @@ fn AlbumsPage(
                         .contains(&needle)
                     || album.source_name.to_lowercase().contains(&needle)
             });
+        }
+        let provider_id = source.get();
+        if !provider_id.is_empty() {
+            items.retain(|album| album.id.provider_id == provider_id);
         }
         match sort.get().as_str() {
             "artist" => items.sort_by_key(|album| {
@@ -393,6 +430,7 @@ fn AlbumsPage(
         <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings to browse albums."</p></section>}>
             <div class="library-toolbar">
                 <label><span>"Filter albums"</span><input type="search" placeholder="Title, artist, or source" on:input=move |event| filter.set(event_target_value(&event))/></label>
+                <SourceFilter providers selected=source/>
                 <label><span>"Sort by"</span><select on:change=move |event| sort.set(event_target_value(&event))><option value="title">"Title"</option><option value="artist">"Artist"</option><option value="year">"Newest year"</option><option value="source">"Source"</option></select></label>
             </div>
             <Show when=move || loading.get()><p class="library-state">"Loading albums…"</p></Show>
@@ -403,10 +441,204 @@ fn AlbumsPage(
                 <div class="album-grid">{move || visible_albums().into_iter().map(|album| {
                     let id = album.id.clone();
                     let selected_id = id.clone();
-                    view! {<button class="album-card" class:selected=move || selected.get().as_ref() == Some(&selected_id) on:click=move |_| {selected.set(Some(id.clone())); load_album_tracks(id.clone(), tracks, current, loading, error)}><Artwork cover=album.cover_art.clone() title=album.name.clone()/><strong>{album.name}</strong><span>{album.artist.unwrap_or_else(|| "Unknown artist".into())}</span><small>{format!("{}{}", album.source_name, album.year.map(|year| format!(" · {year}")).unwrap_or_default())}</small></button>}
+                    view! {<button class="album-card" class:selected=move || selected.get().as_ref() == Some(&selected_id) disabled=move || loading.get() on:click=move |_| {
+                        if loading.get_untracked() {
+                            return;
+                        }
+                        loading.set(true);
+                        selected.set(Some(id.clone()));
+                        spawn_local(load_album_tracks(id.clone(), tracks, current, loading, error));
+                    }><Artwork cover=album.cover_art.clone() title=album.name.clone()/><strong>{album.name}</strong><span>{album.artist.unwrap_or_else(|| "Unknown artist".into())}</span><small>{format!("{}{}", album.source_name, album.year.map(|year| format!(" · {year}")).unwrap_or_default())}</small></button>}
                 }).collect_view()}</div>
             </Show>
             <section class="tracks page-tracks"><div class="section-title"><div><p class="eyebrow">"SELECTED ALBUM"</p><h2>"Tracks"</h2></div><span class="track-count">{move || if selected.get().is_some() { format!("{} TRACKS", tracks.get().len()) } else { "0 TRACKS".into() }}</span></div><Show when=move || selected.get().is_some() fallback=move || view! {<div class="empty-results"><p>"Select an album to view its tracks."</p></div>}><TrackResults items=tracks queue=tracks current playing empty_message="This album did not return any tracks."/></Show></section>
+        </Show>
+    </main>}
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PlaylistDetail {
+    #[allow(dead_code)]
+    playlist: Playlist,
+    tracks: Vec<Track>,
+}
+
+#[component]
+fn ArtistsPage(providers: RwSignal<Vec<Provider>>) -> impl IntoView {
+    let artists = RwSignal::new(Vec::<Artist>::new());
+    let issues = RwSignal::new(Vec::<ProviderIssue>::new());
+    let loading = RwSignal::new(false);
+    let error = RwSignal::new(None::<String>);
+    let filter = RwSignal::new(String::new());
+    let sort = RwSignal::new(String::from("name"));
+    let source = RwSignal::new(String::new());
+
+    Effect::new(move |_| {
+        if providers.get().is_empty() {
+            artists.set(Vec::new());
+            issues.set(Vec::new());
+            return;
+        }
+        loading.set(true);
+        error.set(None);
+        spawn_local(async move {
+            match get_json::<AggregateResponse<Artist>>("/library/artists?limit=500").await {
+                Ok(response) => {
+                    artists.set(response.items);
+                    issues.set(response.issues);
+                }
+                Err(message) => {
+                    artists.set(Vec::new());
+                    issues.set(Vec::new());
+                    error.set(Some(message));
+                }
+            }
+            loading.set(false);
+        });
+    });
+
+    let visible_artists = move || {
+        let needle = filter.get().trim().to_lowercase();
+        let mut items = artists.get();
+        if !needle.is_empty() {
+            items.retain(|artist| {
+                artist.name.to_lowercase().contains(&needle)
+                    || artist.source_name.to_lowercase().contains(&needle)
+            });
+        }
+        let provider_id = source.get();
+        if !provider_id.is_empty() {
+            items.retain(|artist| artist.id.provider_id == provider_id);
+        }
+        if sort.get() == "albums" {
+            items.sort_by_key(|artist| {
+                (
+                    std::cmp::Reverse(artist.album_count.unwrap_or(0)),
+                    artist.name.to_lowercase(),
+                )
+            });
+        } else {
+            items.sort_by_key(|artist| artist.name.to_lowercase());
+        }
+        items
+    };
+
+    view! {<main class="content library-page artists-page">
+        <header><p class="eyebrow">"UNIFIED LIBRARY"</p><h1>"Artists"</h1><p>"Browse artists from every connected source."</p></header>
+        <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings to browse artists."</p></section>}>
+            <div class="library-toolbar">
+                <label><span>"Filter artists"</span><input type="search" placeholder="Artist or source" on:input=move |event| filter.set(event_target_value(&event))/></label>
+                <SourceFilter providers selected=source/>
+                <label><span>"Sort by"</span><select on:change=move |event| sort.set(event_target_value(&event))><option value="name">"Name"</option><option value="albums">"Album count"</option></select></label>
+            </div>
+            <Show when=move || loading.get()><p class="library-state">"Loading artists…"</p></Show>
+            <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Could not load artists"</b><p>{message}</p></div>})}</Show>
+            <ProviderNotices issues/>
+            <div class="section-title"><div><p class="eyebrow">"ALL SOURCES"</p><h2>"Artists"</h2></div><span class="track-count">{move || format!("{} SHOWN", visible_artists().len())}</span></div>
+            <Show when=move || !visible_artists().is_empty() fallback=move || view! {<div class="empty-results"><p>"No artists match this filter."</p></div>}>
+                <div class="artist-grid">{move || visible_artists().into_iter().map(|artist| view! {
+                    <article class="artist-card"><Artwork cover=artist.cover_art title=artist.name.clone()/><strong>{artist.name}</strong><span>{artist.album_count.map(|count| format!("{count} albums")).unwrap_or_else(|| "Album count unavailable".into())}</span><small>{artist.source_name}</small></article>
+                }).collect_view()}</div>
+            </Show>
+        </Show>
+    </main>}
+}
+
+#[component]
+fn PlaylistsPage(
+    providers: RwSignal<Vec<Provider>>,
+    queue: RwSignal<Vec<Track>>,
+    current: RwSignal<usize>,
+    playing: RwSignal<bool>,
+) -> impl IntoView {
+    let playlists = RwSignal::new(Vec::<Playlist>::new());
+    let playlist_tracks = RwSignal::new(Vec::<Track>::new());
+    let issues = RwSignal::new(Vec::<ProviderIssue>::new());
+    let loading = RwSignal::new(false);
+    let error = RwSignal::new(None::<String>);
+    let selected = RwSignal::new(None::<MediaId>);
+    let filter = RwSignal::new(String::new());
+    let source = RwSignal::new(String::new());
+
+    Effect::new(move |_| {
+        if providers.get().is_empty() {
+            playlists.set(Vec::new());
+            playlist_tracks.set(Vec::new());
+            issues.set(Vec::new());
+            return;
+        }
+        loading.set(true);
+        error.set(None);
+        spawn_local(async move {
+            match get_json::<AggregateResponse<Playlist>>("/library/playlists").await {
+                Ok(response) => {
+                    playlists.set(response.items);
+                    issues.set(response.issues);
+                }
+                Err(message) => {
+                    playlists.set(Vec::new());
+                    issues.set(Vec::new());
+                    error.set(Some(message));
+                }
+            }
+            loading.set(false);
+        });
+    });
+
+    let visible_playlists = move || {
+        let needle = filter.get().trim().to_lowercase();
+        let mut items = playlists.get();
+        if !needle.is_empty() {
+            items.retain(|playlist| {
+                playlist.name.to_lowercase().contains(&needle)
+                    || playlist
+                        .owner
+                        .as_deref()
+                        .unwrap_or_default()
+                        .to_lowercase()
+                        .contains(&needle)
+                    || playlist.source_name.to_lowercase().contains(&needle)
+            });
+        }
+        let provider_id = source.get();
+        if !provider_id.is_empty() {
+            items.retain(|playlist| playlist.id.provider_id == provider_id);
+        }
+        items.sort_by_key(|playlist| playlist.name.to_lowercase());
+        items
+    };
+
+    view! {<main class="content library-page playlists-page">
+        <header><p class="eyebrow">"UNIFIED LIBRARY"</p><h1>"Playlists"</h1><p>"Browse server playlists without changing the active source."</p></header>
+        <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings to browse playlists."</p></section>}>
+            <div class="library-toolbar playlist-toolbar"><label><span>"Filter playlists"</span><input type="search" placeholder="Name, owner, or source" on:input=move |event| filter.set(event_target_value(&event))/></label><SourceFilter providers selected=source/></div>
+            <Show when=move || loading.get()><p class="library-state">"Loading playlists…"</p></Show>
+            <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Could not load playlists"</b><p>{message}</p></div>})}</Show>
+            <ProviderNotices issues/>
+            <div class="section-title"><div><p class="eyebrow">"ALL SOURCES"</p><h2>"Playlists"</h2></div><span class="track-count">{move || format!("{} SHOWN", visible_playlists().len())}</span></div>
+            <Show when=move || !visible_playlists().is_empty() fallback=move || view! {<div class="empty-results"><p>"No playlists match this filter."</p></div>}>
+                <div class="playlist-grid">{move || visible_playlists().into_iter().map(|playlist| {
+                    let id = playlist.id.clone();
+                    let selected_id = id.clone();
+                    let duration = format_duration(playlist.duration_seconds);
+                    view! {<button class="playlist-card" class:selected=move || selected.get().as_ref() == Some(&selected_id) disabled=move || loading.get() on:click=move |_| {
+                        if loading.get_untracked() { return; }
+                        loading.set(true);
+                        error.set(None);
+                        selected.set(Some(id.clone()));
+                        let request_id = id.clone();
+                        spawn_local(async move {
+                            match get_json::<PlaylistDetail>(&format!("/library/playlists/{}/{}", encode(&request_id.provider_id), encode(&request_id.item_id))).await {
+                                Ok(detail) => { playlist_tracks.set(detail.tracks); current.set(0); }
+                                Err(message) => error.set(Some(message)),
+                            }
+                            loading.set(false);
+                        });
+                    }><Artwork cover=playlist.cover_art title=playlist.name.clone()/><strong>{playlist.name}</strong><span>{playlist.owner.unwrap_or_else(|| "Unknown owner".into())}</span><small>{format!("{} · {} tracks · {duration}", playlist.source_name, playlist.song_count.unwrap_or(0))}</small></button>}
+                }).collect_view()}</div>
+            </Show>
+            <section class="tracks page-tracks"><div class="section-title"><div><p class="eyebrow">"SELECTED PLAYLIST"</p><h2>"Tracks"</h2></div><span class="track-count">{move || format!("{} TRACKS", playlist_tracks.get().len())}</span></div><Show when=move || selected.get().is_some() fallback=move || view! {<div class="empty-results"><p>"Select a playlist to view its tracks."</p></div>}><TrackResults items=playlist_tracks queue current playing empty_message="This playlist did not return any tracks."/></Show></section>
         </Show>
     </main>}
 }
@@ -425,7 +657,19 @@ fn SearchPage(
     let error = RwSignal::new(None::<String>);
     let searched = RwSignal::new(false);
     let submitted_query = RwSignal::new(String::new());
+    let source = RwSignal::new(String::new());
+    let visible_results = Signal::derive(move || {
+        let provider_id = source.get();
+        results
+            .get()
+            .into_iter()
+            .filter(|track| provider_id.is_empty() || track.id.provider_id == provider_id)
+            .collect::<Vec<_>>()
+    });
     let submit = move |_| {
+        if loading.get_untracked() {
+            return;
+        }
         let term = query.get().trim().to_string();
         if term.is_empty() {
             return;
@@ -458,11 +702,11 @@ fn SearchPage(
     view! {<main class="content library-page search-page">
         <header><p class="eyebrow">"ALL CONNECTED SOURCES"</p><h1>"Search"</h1><p>"Find tracks across the complete unified library."</p></header>
         <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings before searching."</p></section>}>
-            <form class="library-search" on:submit=move |event| {event.prevent_default(); submit(())}><span>"⌕"</span><input autofocus type="search" aria-label="Search all connected sources" placeholder="Track, artist, or album" on:input=move |event| query.set(event_target_value(&event))/><button class="primary" type="submit" disabled=move || loading.get()>{move || if loading.get() {"Searching…"} else {"Search"}}</button></form>
+            <div class="search-toolbar"><form class="library-search" on:submit=move |event| {event.prevent_default(); submit(())}><span>"⌕"</span><input autofocus type="search" aria-label="Search all connected sources" placeholder="Track, artist, or album" on:input=move |event| query.set(event_target_value(&event))/><button class="primary" type="submit" disabled=move || loading.get()>{move || if loading.get() {"Searching…"} else {"Search"}}</button></form><SourceFilter providers selected=source/></div>
             <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Search failed"</b><p>{message}</p></div>})}</Show>
             <ProviderNotices issues/>
             <Show when=move || searched.get()>
-                <section class="tracks search-results"><div class="section-title"><div><p class="eyebrow">"SEARCH RESULTS"</p><h2>{move || format!("Results for “{}”", submitted_query.get())}</h2></div><span class="track-count">{move || format!("{} TRACKS", results.get().len())}</span></div><TrackResults items=results queue current playing empty_message="No tracks matched this search."/></section>
+                <section class="tracks search-results"><div class="section-title"><div><p class="eyebrow">"SEARCH RESULTS"</p><h2>{move || format!("Results for “{}”", submitted_query.get())}</h2></div><span class="track-count">{move || format!("{} TRACKS", visible_results.get().len())}</span></div><TrackResults items=visible_results queue current playing empty_message="No tracks matched this search."/></section>
             </Show>
             <Show when=move || !searched.get()><div class="search-prompt"><span>"⌕"</span><h2>"Search every source at once"</h2><p>"Results retain their provider identity for reliable playback."</p></div></Show>
         </Show>
@@ -515,7 +759,39 @@ fn Player(
     playing: RwSignal<bool>,
 ) -> impl IntoView {
     let track = move || tracks.get().get(current.get()).cloned();
-    view! {<footer class="player real-player"><div class="now"><div><b>{move||track().map(|t|t.title).unwrap_or_else(||"Nothing playing".into())}</b><span>{move||track().map(|t|format!("{} · {}",t.artist.unwrap_or_default(),t.source_name)).unwrap_or_default()}</span></div></div><div class="transport">{move||track().map(|t|{let src=api(&format!("/providers/{}/tracks/{}/stream",encode(&t.id.provider_id),encode(&t.id.item_id)));view!{<audio controls autoplay=playing.get() src=src></audio>}})}</div><div class="player-tools"><span>{move||if playing.get(){"STREAMING"}else{"READY"}}</span></div></footer>}
+    let shuffle = RwSignal::new(false);
+    let repeat = RwSignal::new(RepeatMode::Off);
+    view! {<footer class="player real-player"><div class="now"><div><b>{move||track().map(|t|t.title).unwrap_or_else(||"Nothing playing".into())}</b><span>{move||track().map(|t|format!("{} · {}",t.artist.unwrap_or_default(),t.source_name)).unwrap_or_default()}</span></div></div><div class="transport">{move||track().map(|t|{let src=api(&format!("/providers/{}/tracks/{}/stream",encode(&t.id.provider_id),encode(&t.id.item_id)));view!{<audio controls autoplay=playing.get() src=src on:play=move |_| playing.set(true) on:pause=move |_| playing.set(false) on:ended=move |event| {
+        if repeat.get_untracked() == RepeatMode::One {
+            let audio = event_target::<web_sys::HtmlAudioElement>(&event);
+            audio.set_current_time(0.0);
+            let _ = audio.play();
+            playing.set(true);
+            return;
+        }
+        let len = tracks.get_untracked().len();
+        if len == 0 {
+            playing.set(false);
+            return;
+        }
+        let index = current.get_untracked();
+        let next = if shuffle.get_untracked() && len > 1 {
+            let offset = (js_sys::Math::random() * (len - 1) as f64).floor() as usize + 1;
+            Some((index + offset) % len)
+        } else if index + 1 < len {
+            Some(index + 1)
+        } else if repeat.get_untracked() == RepeatMode::All {
+            Some(0)
+        } else {
+            None
+        };
+        if let Some(next) = next {
+            current.set(next);
+            playing.set(true);
+        } else {
+            playing.set(false);
+        }
+    }></audio>}})}</div><div class="player-tools"><button type="button" class:active=move || shuffle.get() aria-pressed=move || shuffle.get().to_string() title="Play the queue in random order" on:click=move |_| shuffle.update(|enabled| *enabled = !*enabled)>"SHUFFLE"</button><button type="button" class:active=move || repeat.get() != RepeatMode::Off title="Cycle repeat mode" on:click=move |_| repeat.update(|mode| *mode = match *mode { RepeatMode::Off => RepeatMode::One, RepeatMode::One => RepeatMode::All, RepeatMode::All => RepeatMode::Off })>{move || match repeat.get() { RepeatMode::Off => "REPEAT OFF", RepeatMode::One => "REPEAT ONE", RepeatMode::All => "REPEAT ALL" }}</button><span>{move||if playing.get(){"STREAMING"}else{"READY"}}</span></div></footer>}
 }
 
 #[component]
@@ -543,9 +819,11 @@ pub fn App() -> impl IntoView {
             issues.set(Vec::new());
             return;
         }
-        spawn_local(load_library(albums, tracks, loading, issues, error));
+        spawn_local(load_library(
+            albums, tracks, current, loading, issues, error,
+        ));
     });
-    view! {<div class="app"><Nav active providers/><div class="view">{move||match active.get(){Page::Home=>view!{<Home providers albums tracks current playing loading issues error/>}.into_any(),Page::Albums=>view!{<AlbumsPage providers albums tracks current playing loading issues error/>}.into_any(),Page::Search=>view!{<SearchPage providers queue=tracks current playing/>}.into_any(),Page::Settings=>view!{<Settings providers/>}.into_any(),_=>view!{<main class="content placeholder"><p class="eyebrow">"UNIFIED LIBRARY"</p><h1>"Coming next"</h1><p>"This page will use the new all-provider library service."</p></main>}.into_any()}}</div><nav class="mobile-nav">{[(Page::Home,"⌂","Home"),(Page::Albums,"▣","Albums"),(Page::Search,"⌕","Search"),(Page::Settings,"⚙","Settings")].into_iter().map(|(p,g,l)|view!{<button class:active=move||active.get()==p on:click=move |_|active.set(p)><span>{g}</span>{l}</button>}).collect_view()}</nav><Player tracks current playing/></div>}
+    view! {<div class="app"><Nav active providers/><div class="view">{move||match active.get(){Page::Home=>view!{<Home providers albums tracks current playing loading issues error/>}.into_any(),Page::Albums=>view!{<AlbumsPage providers albums tracks current playing loading issues error/>}.into_any(),Page::Artists=>view!{<ArtistsPage providers/>}.into_any(),Page::Playlists=>view!{<PlaylistsPage providers queue=tracks current playing/>}.into_any(),Page::Search=>view!{<SearchPage providers queue=tracks current playing/>}.into_any(),Page::Settings=>view!{<Settings providers/>}.into_any()}}</div><nav class="mobile-nav">{[(Page::Home,"⌂","Home"),(Page::Albums,"▣","Albums"),(Page::Search,"⌕","Search"),(Page::Settings,"⚙","Settings")].into_iter().map(|(p,g,l)|view!{<button class:active=move||active.get()==p on:click=move |_|active.set(p)><span>{g}</span>{l}</button>}).collect_view()}</nav><Player tracks current playing/></div>}
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen(start)]

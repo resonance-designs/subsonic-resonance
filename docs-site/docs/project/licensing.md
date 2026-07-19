@@ -141,25 +141,23 @@ Debug symbols, source maps, development endpoints, build paths, and embedded sec
 
 ## Current repository alignment
 
-The root `Cargo.toml` currently declares:
+The root `Cargo.toml` now declares:
 
 ```toml
 [workspace.package]
-license = "MIT OR Apache-2.0"
+license-file = "LICENSE.md"
 ```
 
-That declaration conflicts with the intended proprietary-freeware model. MIT and Apache-2.0 allow recipients to copy, modify, redistribute, sublicense, and use covered code in proprietary products subject to their respective conditions.
+The workspace crates inherit that declaration, and the top-level `LICENSE.md` implements the intended proprietary-freeware model. It permits no-charge use of official compiled releases while reserving source-code, modification, redistribution, sublicensing, and commercialization rights for separately executed written agreements.
 
-Before a proprietary release or intentional source distribution, the project should:
+Before a proprietary release or intentional source distribution, the project must still:
 
 1. Confirm whether any copies or commits have already been intentionally offered under MIT or Apache-2.0.
 2. Confirm that the current owner has the right to relicense every contribution.
-3. Replace the workspace declaration with an appropriate proprietary identifier such as `LicenseRef-Proprietary`, where supported by the applicable Cargo publishing workflow.
-4. Add a top-level proprietary `LICENSE` or copyright-and-license notice.
-5. Add the final end-user EULA.
-6. Add a third-party notices document and corresponding release-generation process.
-7. Keep the source repository private and control developer access.
-8. Review package registries, source archives, CI artifacts, container images, and release bundles so source is not published unintentionally.
+3. Obtain qualified legal review of `LICENSE.md` and any final end-user terms.
+4. Add a third-party notices document and corresponding release-generation process.
+5. Keep the source repository private and control developer access.
+6. Review package registries, source archives, CI artifacts, container images, and release bundles so source is not published unintentionally.
 
 Changing the license affects future distributions. It does not revoke rights already granted for copies previously distributed under MIT or Apache-2.0. Those recipients may continue exercising the license applicable to the copies they received.
 
@@ -190,8 +188,8 @@ Before distributing Resonance under this model:
 
 - [ ] Confirm ownership of all Resonance source and assets.
 - [ ] Determine whether any version was already distributed under MIT or Apache-2.0.
-- [ ] Replace the current workspace licensing metadata after that review.
-- [ ] Add the proprietary copyright and license notice.
+- [x] Replace the workspace licensing metadata with an inherited proprietary license file.
+- [x] Add the proprietary copyright and license notice.
 - [ ] Obtain legal review of the EULA.
 - [ ] Obtain legal review of the NDA and paid source-access agreement.
 - [ ] Adopt contribution and contractor ownership terms.
@@ -210,4 +208,4 @@ Resonance can be made available to users at no charge while remaining proprietar
 
 Ordinary users would receive a limited license to run compiled releases. Developers needing proprietary source would require a paid, written source-access license plus appropriate confidentiality protections. A public, permissively licensed plugin SDK could be offered separately without opening the application core.
 
-The current `MIT OR Apache-2.0` project declaration must be resolved before adopting this model, and third-party dependency obligations must continue to be honored regardless of the license selected for Resonance itself.
+The project now declares its proprietary terms through `LICENSE.md`. Third-party dependency obligations must continue to be honored regardless of the license selected for Resonance itself, and the new license and distribution process still require qualified legal review before release.

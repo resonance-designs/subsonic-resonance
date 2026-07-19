@@ -16,15 +16,19 @@ sidebar_position: 1
 - Query every connected provider concurrently as one unified library.
 - Browse albums from all available providers without selecting a globally active connection.
 - Retrieve successive provider album pages instead of limiting each collection to its first 30 entries.
-- Filter and sort the dedicated Albums page by title, artist, year, and source.
+- Filter Albums, Artists, Playlists, and Search by provider without disabling or changing any configured connection.
+- Sort the dedicated Albums page by title, artist, year, and source.
+- Browse and filter artists from every connected source, with album-count sorting and provider attribution.
+- Browse server playlists from every connected source, load provider-qualified playlist tracks, and play them through the shared queue.
 - Search every connected library from the dedicated Search page.
 - Load provider-qualified album tracks and play results from Home, Albums, or Search.
 - Continue displaying successful sources when another provider is offline, unauthorized, invalid, or times out.
 - Proxy cover artwork and audio without exposing credentials to the browser.
 - Stream audio through the browser with byte-range support for seeking.
+- Randomize the current queue, repeat the current track, or repeat the complete album, playlist, or search queue for the active session.
 - Run the same Leptos UI in a browser or Tauri 2 desktop shell.
 
-The Artists and Playlists pages remain placeholders. Home, Albums, and Search use the unified library service.
+Home, Albums, Artists, Playlists, and Search now use the unified library service. Creating, editing, and persisting mixed-source playlists remains future work.
 
 ## Security and persistence
 
@@ -39,7 +43,7 @@ Durable secrets should eventually be stored through the operating-system credent
 ## Known limitations
 
 - UI-added providers are memory-only and must be re-added after a backend restart.
-- Artists and Playlists remain placeholders; Home, Albums, and Search are connected to live unified-library data.
+- Server playlists are currently read-only; creating, editing, and persisting mixed-source playlists is not yet implemented.
 - The desktop shell depends on a separately running backend today.
 - The browser API base is currently fixed to `http://127.0.0.1:3000/api`.
 - Provider registration accepts local-network URLs by design; the backend should not be exposed to untrusted networks in its current form.

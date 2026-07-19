@@ -1,11 +1,11 @@
 # Subsonic Resonance
 
-![Static Badge](https://img.shields.io/badge/Version-0.1.2-orange)
-![Static Badge](https://img.shields.io/badge/Latest_Release-v0.1.1-green)
+![Static Badge](https://img.shields.io/badge/Version-0.1.3-orange)
+![Static Badge](https://img.shields.io/badge/Latest_Release-v0.1.3-green)
 
 Subsonic Resonance is a Windows-first, cross-platform OpenSubsonic streaming client written in Rust. It uses a shared Leptos/WebAssembly interface for the browser and Tauri desktop shell, with provider integrations behind a provider-neutral Rust API.
 
-The project is currently at `0.1.2` and under active development toward the `0.2.0` library-experience release.
+The project is currently at `0.1.3` and under active development toward the `0.2.0` library-experience release.
 
 ## Current functionality
 
@@ -16,15 +16,19 @@ The project is currently at `0.1.2` and under active development toward the `0.2
 - Query every connected provider concurrently as one unified library.
 - Browse albums from all available providers without selecting a globally active connection.
 - Retrieve successive provider album pages instead of limiting each collection to its first 30 entries.
-- Filter and sort the dedicated Albums page by title, artist, year, and source.
+- Filter Albums, Artists, Playlists, and Search by provider without disabling or changing any configured connection.
+- Sort the dedicated Albums page by title, artist, year, and source.
+- Browse and filter artists from every connected source, with album-count sorting and provider attribution.
+- Browse server playlists from every connected source, load provider-qualified playlist tracks, and play them through the shared queue.
 - Search every connected library from the dedicated Search page.
 - Load provider-qualified album tracks and play results from Home, Albums, or Search.
 - Continue displaying successful sources when another provider is offline, unauthorized, invalid, or times out.
 - Proxy cover artwork and audio without exposing credentials to the browser.
 - Stream audio through the browser with byte-range support for seeking.
+- Randomize the current queue, repeat the current track, or repeat the complete album, playlist, or search queue for the active session.
 - Run the same Leptos UI in a browser or Tauri 2 desktop shell.
 
-The Artists and Playlists pages remain placeholders. Home, Albums, and Search use the unified library service.
+Home, Albums, Artists, Playlists, and Search now use the unified library service. Creating, editing, and persisting mixed-source playlists remains future work.
 
 ## Architecture
 
@@ -240,9 +244,8 @@ The release command reads the Cargo workspace version, confirms all Cargo, Node,
 - Persist and restore interface preferences before first paint to avoid theme flashes.
 - Allow playlists and the playback queue to mix tracks from multiple Subsonic servers, Bandcamp, and future local-library providers.
 - Preserve each playlist item's source identity and report unavailable sources without discarding the rest of the playlist.
-- Complete Artists and Playlists pages using the existing unified provider data; Albums and Search are already live.
 - Add full album-detail navigation and user-facing pagination while retaining the existing album sorting, filtering, provider attribution, and paged provider discovery.
-- Build a persistent playback queue with previous/next behavior and proper playback state.
+- In 0.1.4, build persistent queue controls with previous/next behavior, playback restoration, and proper playback state.
 - Add favorites, scrobbling, play-queue restoration, and server capability detection.
 - Improve loading, empty, offline, authentication-expired, and partial-failure states.
 
@@ -275,7 +278,7 @@ The release command reads the Cargo workspace version, confirms all Cargo, Node,
 ## Known limitations
 
 - UI-added providers are memory-only and must be re-added after a backend restart.
-- Artists and Playlists remain placeholders; Home, Albums, and Search are connected to live unified-library data.
+- Server playlists are currently read-only; creating, editing, and persisting mixed-source playlists is not yet implemented.
 - The desktop shell depends on a separately running backend today.
 - The browser API base is currently fixed to `http://127.0.0.1:3000/api`.
 - Provider registration accepts local-network URLs by design; the backend should not be exposed to untrusted networks in its current form.
