@@ -59,6 +59,13 @@ pub struct Artist {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ArtistDetail {
+    pub artist: Artist,
+    pub albums: Vec<Album>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Album {
     pub id: String,
     pub name: String,
@@ -134,6 +141,13 @@ pub struct LibraryArtist {
     pub album_count: Option<u32>,
     pub cover_art: Option<MediaId>,
     pub source_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryArtistDetail {
+    pub artist: LibraryArtist,
+    pub albums: Vec<LibraryAlbum>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -235,6 +249,7 @@ pub enum ProviderError {
 pub trait MusicProvider: Send + Sync {
     async fn ping(&self) -> Result<ProviderStatus, ProviderError>;
     async fn artists(&self, limit: u32, offset: u32) -> Result<Vec<Artist>, ProviderError>;
+    async fn artist(&self, id: &str) -> Result<ArtistDetail, ProviderError>;
     async fn albums(&self, limit: u32, offset: u32) -> Result<Vec<Album>, ProviderError>;
     async fn album(&self, id: &str) -> Result<AlbumDetail, ProviderError>;
     async fn playlists(&self) -> Result<Vec<Playlist>, ProviderError>;

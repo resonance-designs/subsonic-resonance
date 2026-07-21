@@ -41,7 +41,10 @@ const config: Config = {
           ]
         },
         theme: {
-          customCss: './static/themes/default.css'
+          customCss: [
+            './static/themes/default.css',
+            './src/css/fonts.css'
+          ]
         }
       } satisfies Preset.Options
     ]
@@ -96,7 +99,7 @@ const config: Config = {
           title: 'Development',
           items: [
             {
-              label: 'GitHub repository',
+              label: 'GitHub Repository',
               href: 'https://github.com/resonance-designs/subsonic-resonance'
             },
             {
@@ -107,10 +110,10 @@ const config: Config = {
         },
         {
           title: 'Legal',
-          items: [{ label: 'Licensing guide', to: '/docs/project/licensing' }]
+          items: [{ label: 'Licensing Guide', to: '/docs/project/licensing' }]
         }
       ],
-      copyright: `<span class="resonance-footer__description">A unified streaming client for OpenSubsonic and other music sources.</span><span class="resonance-footer__copyright">Copyright © ${new Date().getFullYear()} Resonance Designs.</span>`
+      copyright: `<span class="resonance-footer__description">A unified streaming client for OpenSubsonic and other music sources.</span><span class="resonance-footer__copyright">Copyright © ${new Date().getFullYear()} <a href="https://resonancedesigns.dev" target="_blank" rel="noopener noreferrer">Resonance Designs<svg width="13.5" height="13.5" aria-label="(opens in new tab)" class="resonance-footer__external-link"><use href="#theme-svg-external-link"></use></svg></a>.</span>`
     },
     colorMode: {
       defaultMode: 'dark',

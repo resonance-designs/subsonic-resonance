@@ -8,6 +8,7 @@
 
 /* Enhanced color palette with darker, more professional variations */
 :root {
+  --resonance-custom-font: 'Resonance Avant Garde', sans-serif;
   /* Primary green palette - darker and more professional */
   --ifm-color-primary: #1e5a3a;
   --ifm-color-primary-dark: #184d32;
@@ -740,13 +741,13 @@ table th {
 
 /* Enhanced link styling - override hardcoded values */
 a {
-  color: var(--ifm-link-color) !important;
+  color: var(--ifm-link-color);
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
 a:hover {
-  color: var(--ifm-link-hover-color) !important;
+  color: var(--ifm-link-hover-color);
 }
 
 /* Enhanced navbar link colors with subtle styling */
@@ -1011,8 +1012,9 @@ a:hover,
   width: 100%;
   margin: 0;
   color: var(--resonance-cyan);
-  font-size: 8px;
-  font-weight: 500;
+  font-family: var(--resonance-custom-font), Georgia, serif;
+  font-size: .6rem;
+  font-weight: 700;
   letter-spacing: 0.2em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -1023,7 +1025,9 @@ a:hover,
   justify-content: space-between;
   width: 100%;
   color: var(--resonance-orange);
-  font-size: 16px;
+  font-family: var(--resonance-custom-font), Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 700;
   letter-spacing: 0;
   line-height: 1.15;
   text-transform: uppercase;
@@ -1207,14 +1211,18 @@ table th,
 
 .footer__title {
   color: var(--resonance-orange);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
+  font-family: var(--resonance-custom-font), Georgia, serif;
+  font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .footer__link-item {
   color: var(--resonance-muted);
+  font-family: var(--resonance-custom-font), Georgia, serif;
   font-size: 0.9rem;
+  font-weight: 400;
 }
 
 .footer__link-item:hover {
@@ -1229,6 +1237,7 @@ table th,
 
 .footer__copyright {
   color: var(--resonance-muted);
+  font-family: var(--resonance-custom-font), Georgia, serif;
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 1rem;
@@ -1242,6 +1251,19 @@ table th,
 .resonance-footer__copyright {
   white-space: nowrap;
 }
+
+.resonance-footer__copyright a {
+  color: var(--resonance-orange);
+}
+
+.resonance-footer__copyright a:hover {
+  color: var(--resonance-amber);
+}
+
+.resonance-footer__external-link {
+  margin-left: 0.3rem;
+}
+
 
 @media (max-width: 640px) {
   .footer__copyright {

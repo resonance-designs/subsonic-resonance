@@ -13,6 +13,7 @@ This file tracks implementation work that is planned but not yet complete. Keep 
 - [x] Define deterministic merge, sort, and pagination behavior for current album and track results arriving from multiple providers; cross-provider metadata deduplication remains future work.
 - [x] Update Home, Albums, Search, and player state to consume aggregated results while showing each item's source.
 - [x] Update Artists to consume aggregated results after adding the required provider contract and API endpoints.
+- [x] **0.1.4:** Add provider-qualified artist detail navigation with complete provider-reported releases and release-track browsing.
 - [ ] Allow playlists and queues to contain provider-qualified tracks from different remote and local providers.
 - [ ] Persist mixed-source playlists without embedding credentials or unstable stream URLs.
 - [ ] Handle a missing, offline, removed, or unauthorized provider at item level so the rest of a mixed playlist remains usable.
@@ -31,14 +32,16 @@ This file tracks implementation work that is planned but not yet complete. Keep 
 - [ ] Persist providers securely using the operating-system credential vault.
 - [ ] Integrate the Rust backend lifecycle into the Tauri desktop application.
 - [x] Add session playback modes for randomized order, repeat-current, and repeat-queue behavior.
-- [ ] **0.1.4:** Add persistent queue controls, native media controls, and playback restoration.
+- [x] **0.1.4:** Persist provider-qualified queue entries and the selected track, with previous, next, inspect, remove, and clear controls.
+- [x] **0.1.4:** Restore in-track playback position plus volume, mute, shuffle, and repeat preferences without autoplaying after reload.
+- [ ] Add native operating-system media controls.
 - [ ] Add provider editing, offline caching, downloads, and per-provider transcoding settings.
 
 ### Theme and interface customization
 
 #### 1. Theme foundation
 
-- [ ] Inventory every hard-coded UI color, font, radius, shadow, spacing value, and component state in `crates/ui/styles.css` and `crates/ui/live.css`.
+- [ ] Inventory every hard-coded UI color, font, radius, shadow, spacing value, and component state in `crates/ui/base.css`, `crates/ui/components.css`, and `crates/ui/player.css`.
 - [ ] Define semantic CSS custom properties instead of component-specific color names. Initial tokens should cover:
   - [ ] Page, sidebar, panel, elevated, input, and player surfaces.
   - [ ] Primary, secondary, muted, inverse, and disabled text.

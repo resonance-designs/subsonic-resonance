@@ -50,15 +50,19 @@ function write(relativePath, contents) {
 }
 
 function main() {
-  const logoSource = path.join(rootDir, 'img', 'logo.png');
+  const logoSource = path.join(rootDir, 'crates', 'ui', 'img', 'logo.png');
   const logoTarget = path.join(rootDir, 'docs-site', 'static', 'img', 'logo.png');
-  const appAlbumsSource = path.join(rootDir, 'img', 'app-albums.png');
+  const appAlbumsSource = path.join(rootDir, 'crates', 'ui', 'img', 'app-albums.png');
   const appAlbumsTarget = path.join(rootDir, 'docs-site', 'static', 'img', 'app-albums.png');
-  if (!fs.existsSync(logoSource)) throw new Error('Required brand asset is missing: img/logo.png');
-  if (!fs.existsSync(appAlbumsSource)) throw new Error('Required application screenshot is missing: img/app-albums.png');
+  const fontsSource = path.join(rootDir, 'crates', 'ui', 'fonts');
+  const fontsTarget = path.join(rootDir, 'docs-site', 'static', 'fonts');
+  if (!fs.existsSync(logoSource)) throw new Error('Required brand asset is missing: crates/ui/img/logo.png');
+  if (!fs.existsSync(appAlbumsSource)) throw new Error('Required application screenshot is missing: crates/ui/img/app-albums.png');
+  if (!fs.existsSync(fontsSource)) throw new Error('Required font assets are missing: crates/ui/fonts');
   fs.mkdirSync(path.dirname(logoTarget), { recursive: true });
   fs.copyFileSync(logoSource, logoTarget);
   fs.copyFileSync(appAlbumsSource, appAlbumsTarget);
+  fs.cpSync(fontsSource, fontsTarget, { recursive: true });
 
   const readme = read('README.md');
   const current = section(readme, 'Current functionality');
