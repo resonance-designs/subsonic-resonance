@@ -1,0 +1,27 @@
+@font-face {
+  font-family: 'Resonance Avant Garde';
+  src: url('/fonts/AVGARDN_2.woff') format('woff');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Resonance Avant Garde';
+  src: url('/fonts/AVGARDD_2.woff') format('woff');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Resonance Avant Garde';
+  src: url('/fonts/AVGARDDO_2.woff') format('woff');
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --resonance-custom-font: 'Resonance Avant Garde', sans-serif;
+}

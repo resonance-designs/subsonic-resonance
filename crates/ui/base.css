@@ -1,0 +1,99 @@
+@import url("data:text/css,");
+
+@font-face {
+  font-family: "Resonance Avant Garde";
+  src: url("/fonts/AVGARDN_2.woff") format("woff");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Resonance Avant Garde";
+  src: url("/fonts/AVGARDD_2.woff") format("woff");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Resonance Avant Garde";
+  src: url("/fonts/AVGARDDO_2.woff") format("woff");
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --ink: #090d12;
+  --panel: #10161d;
+  --panel2: #151c24;
+  --line: #29313a;
+  --cream: #f2ede3;
+  --muted: #91a0ac;
+  --amber: #e7a54a;
+  --coral: #e66f59;
+  --serif: Georgia, "Times New Roman", serif;
+  --sans: "Segoe UI", Candara, "Trebuchet MS", sans-serif;
+  --custom-font: "Resonance Avant Garde", var(--sans);
+  color-scheme: dark;
+  font-family: var(--sans);
+  background: var(--ink);
+  color: var(--cream);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--ink);
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 72% 15%, #1b2327 0, transparent 30%),
+    linear-gradient(135deg, #0a0e13, #0c1117 55%, #090c10);
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+input[type="range"] {
+  accent-color: var(--resonance-orange);
+  height: 2px;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid #f3bc69;
+  outline-offset: 3px;
+}
+
+@keyframes pulse {
+  to {
+    height: 25px;
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *:before,
+  *:after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

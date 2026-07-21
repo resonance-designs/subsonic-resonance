@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-07-19
+
+### Added
+
+- Added provider-qualified artist detail pages that load an artist’s complete provider-reported release list, release tracks, and shared-queue playback without interrupting the active stream during browsing.
+- Added a versioned browser-side playback queue that restores provider-qualified tracks and the selected position without storing credentials or stream URLs.
+- Added previous, next, queue inspection, track removal, and clear-queue controls to the shared player.
+- Added a unified custom playback frame containing play/pause, seek progress, elapsed and duration times, mute, volume, previous/next, shuffle, repeat, and queue controls.
+- Added versioned restoration for in-track position, volume, mute, shuffle, and repeat preferences, with periodic, pause, and page-exit checkpoints and no automatic playback after reload.
+
+### Changed
+
+- Replaced the player’s text-based shuffle, repeat, and volume controls with state-aware, accessible icons.
+- Removed an unnecessary playlist-entry clone when converting OpenSubsonic playlist details into provider-neutral tracks.
+- Consolidated the unified Artists and Playlists concurrency, timeout, qualification, sorting, and partial-failure flow into a shared provider aggregation helper.
+- Consolidated album, artist, and playlist presentation into a shared media-card style while preserving their distinct artwork shapes and aspect ratios.
+- Preserved restored queues across provider discovery, empty-provider states, and unified library refreshes; the first album now initializes playback only when no saved queue exists.
+- Replaced the legacy base/override stylesheet pair with scoped `base.css`, `components.css`, and `player.css` bundles and removed overlapping `styles.css`/`live.css` ownership.
+- Moved the canonical application images into `crates/ui/img` and updated both the UI build and documentation sync pipelines to consume that single source of truth.
+- Exposed the bundled custom font family and its normal, bold, and bold-italic faces to both the application and documentation stylesheets without changing the current typography defaults.
+
+### Fixed
+
+- Added an album-catalog compatibility fallback for Subsonic servers that list artists but omit, reject, or return an invalid `getArtist` response.
+- Scoped successful artist-detail responses by artist ID or name so providers cannot populate an artist page with unrelated collection albums.
+- Validated artist-detail results against the stable artist-list identity and album count, rebuilding inconsistent or unattributed Bandcamp responses from the provider catalog.
+- Unified the Artists, Playlists, Search, and Settings page headings—and the Settings section heading—with the established editorial typography used throughout Home and Albums.
+- Added the standard external-link indicator and safe new-tab relationship attributes to the documentation footer's Resonance Designs link.
+- Corrected invalid color and calculated-height syntax in the component stylesheet.
+- Clamped provider-scoped artist request limits to the supported 1–500 range already enforced by the unified artist endpoint.
+- Removed the Subsonic artist result cap that prevented unified offset pagination from reaching artists beyond the first 500 entries.
+- Added request-generation guards to Artists and Playlists so stale provider-triggered responses cannot overwrite newer data, errors, or loading state.
+- Stopped shuffled playback at the final queue item when repeat is disabled while retaining randomized wrapping for repeat-all mode.
+- Decoupled user pause intent from transient media-element pause events so switching application views no longer terminates active playback.
+- Separated browsed album, playlist, and Home search results from the persistent playback queue so selecting other library content no longer changes the queue index or interrupts the current track.
+- Restored immediate track playback by handing explicit track selections directly to the persistent audio engine within the initiating user gesture.
+- Prevented reactive queue updates from reassigning the active audio source and repeatedly resetting playback to the beginning.
+
 ## [0.1.3] - 2026-07-19
 
 ### Added

@@ -5,8 +5,8 @@ use md5::{Digest, Md5};
 use rand::{Rng, distr::Alphanumeric};
 use reqwest::Client;
 use resonance_core::{
-    Album, AlbumDetail, Artist, MusicProvider, Playlist, PlaylistDetail, ProviderError,
-    ProviderStatus, Track,
+    Album, AlbumDetail, Artist, ArtistDetail, MusicProvider, Playlist, PlaylistDetail,
+    ProviderError, ProviderStatus, Track,
 };
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
@@ -156,6 +156,13 @@ impl SubsonicClient {
         matches!(error, ProviderError::InvalidResponse(message) if message.contains("missing field") || message.contains("did not contain its result"))
     }
 
+    fn artist_detail_compatibility_error(error: &ProviderError) -> bool {
+        matches!(
+            error,
+            ProviderError::InvalidResponse(_) | ProviderError::Remote { .. }
+        )
+    }
+
     async fn album_page(&self, size: u32, offset: u32) -> Result<Vec<Album>, ProviderError> {
         let arguments = [
             ("type", "newest".into()),
@@ -229,8 +236,49 @@ impl MusicProvider for SubsonicClient {
         Ok(artists
             .into_iter()
             .skip(offset as usize)
-            .take(limit.min(500) as usize)
+            .take(limit as usize)
             .collect())
+    }
+
+    async fn artist(&self, id: &str) -> Result<ArtistDetail, ProviderError> {
+        let response: Result<ApiResult<ArtistBody>, ProviderError> =
+            self.get("getArtist", &[("id", id.into())]).await;
+        match response {
+            Ok(response) => {
+                let response_artist: Artist = response.body.artist.artist.into();
+                let response_albums: Vec<Album> = response
+                    .body
+                    .artist
+                    .album
+                    .into_iter()
+                    .map(Into::into)
+                    .collect();
+                let listed_artist = self
+                    .artists(u32::MAX, 0)
+                    .await
+                    .ok()
+                    .and_then(|artists| artists.into_iter().find(|artist| artist.id == id));
+                let artist = listed_artist.unwrap_or(response_artist);
+                let has_attribution = albums_have_artist_attribution(&response_albums);
+                let detail = scoped_artist_detail(artist.clone(), response_albums);
+                let count_conflicts = artist
+                    .album_count
+                    .is_some_and(|expected| detail.albums.len() != expected as usize);
+
+                if !has_attribution || count_conflicts {
+                    if let Ok(albums) = self.albums(500, 0).await {
+                        return Ok(scoped_artist_detail(artist, albums));
+                    }
+                }
+                Ok(detail)
+            }
+            Err(error) if Self::artist_detail_compatibility_error(&error) => {
+                let artists = self.artists(u32::MAX, 0).await?;
+                let albums = self.albums(500, 0).await?;
+                artist_detail_from_catalog(id, artists, albums).ok_or(error)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     async fn albums(&self, limit: u32, offset: u32) -> Result<Vec<Album>, ProviderError> {
@@ -338,8 +386,11 @@ impl MusicProvider for SubsonicClient {
     async fn playlist(&self, id: &str) -> Result<PlaylistDetail, ProviderError> {
         let response: ApiResult<PlaylistBody> =
             self.get("getPlaylist", &[("id", id.into())]).await?;
-        let playlist = response.body.playlist;
-        let tracks = playlist.entry.clone().into_iter().map(Into::into).collect();
+        let mut playlist = response.body.playlist;
+        let tracks = std::mem::take(&mut playlist.entry)
+            .into_iter()
+            .map(Into::into)
+            .collect();
         Ok(PlaylistDetail {
             playlist: playlist.into(),
             tracks,
@@ -407,6 +458,19 @@ struct PingBody {}
 #[derive(Deserialize)]
 struct ArtistsBody {
     artists: SubsonicArtists,
+}
+
+#[derive(Deserialize)]
+struct ArtistBody {
+    artist: SubsonicArtistDetail,
+}
+
+#[derive(Deserialize)]
+struct SubsonicArtistDetail {
+    #[serde(flatten)]
+    artist: SubsonicArtist,
+    #[serde(default)]
+    album: Vec<SubsonicAlbum>,
 }
 
 #[derive(Deserialize)]
@@ -675,6 +739,48 @@ impl From<SubsonicTrack> for Track {
     }
 }
 
+fn artist_detail_from_catalog(
+    id: &str,
+    artists: Vec<Artist>,
+    albums: Vec<Album>,
+) -> Option<ArtistDetail> {
+    let artist = artists.into_iter().find(|artist| artist.id == id)?;
+    Some(scoped_artist_detail(artist, albums))
+}
+
+fn scoped_artist_detail(mut artist: Artist, albums: Vec<Album>) -> ArtistDetail {
+    let has_attribution = albums_have_artist_attribution(&albums);
+    let albums = if has_attribution {
+        albums
+            .into_iter()
+            .filter(|album| {
+                album.artist_id.as_deref() == Some(artist.id.as_str())
+                    || album
+                        .artist
+                        .as_deref()
+                        .is_some_and(|name| name.eq_ignore_ascii_case(&artist.name))
+            })
+            .collect()
+    } else {
+        albums
+    };
+    artist.album_count = Some(albums.len() as u32);
+    if artist.cover_art.is_none() {
+        artist.cover_art = albums.iter().find_map(|album| album.cover_art.clone());
+    }
+    ArtistDetail { artist, albums }
+}
+
+fn albums_have_artist_attribution(albums: &[Album]) -> bool {
+    albums.iter().any(|album| {
+        album.artist_id.is_some()
+            || album
+                .artist
+                .as_deref()
+                .is_some_and(|value| !value.is_empty())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -751,6 +857,14 @@ mod tests {
         assert_eq!(artist.album_count, Some(3));
         assert_eq!(artist.cover_art.as_deref(), Some("99"));
 
+        let detail: ArtistBody = serde_json::from_str(
+            r#"{"artist":{"id":42,"name":"Artist One","albumCount":"2","coverArt":99,"album":[{"id":10,"name":"First","artist":"Artist One","artistId":42},{"id":11,"name":"Second","artist":"Artist One","artistId":42}]}}"#,
+        )
+        .unwrap();
+        assert_eq!(detail.artist.artist.id, "42");
+        assert_eq!(detail.artist.album.len(), 2);
+        assert_eq!(detail.artist.album[1].name, "Second");
+
         let playlist: PlaylistBody = serde_json::from_str(
             r#"{"playlist":{"id":7,"name":"Favorites","owner":"listener","songCount":"1","duration":"180","coverArt":88,"entry":[{"id":9,"title":"Track One","duration":"180"}]}}"#,
         )
@@ -759,5 +873,95 @@ mod tests {
         assert_eq!(playlist.playlist.song_count, Some(1));
         assert_eq!(playlist.playlist.cover_art.as_deref(), Some("88"));
         assert_eq!(playlist.playlist.entry[0].id, "9");
+    }
+
+    #[test]
+    fn artist_detail_fallback_matches_releases_by_id_or_name() {
+        let artists = vec![Artist {
+            id: "name:Artist One".into(),
+            name: "Artist One".into(),
+            album_count: None,
+            cover_art: None,
+        }];
+        let albums = vec![
+            Album {
+                id: "one".into(),
+                name: "First".into(),
+                artist: Some("Artist One".into()),
+                artist_id: None,
+                cover_art: Some("cover-one".into()),
+                song_count: Some(1),
+                duration_seconds: None,
+                year: None,
+            },
+            Album {
+                id: "other".into(),
+                name: "Other".into(),
+                artist: Some("Someone Else".into()),
+                artist_id: Some("someone-else".into()),
+                cover_art: None,
+                song_count: Some(1),
+                duration_seconds: None,
+                year: None,
+            },
+        ];
+
+        let detail = artist_detail_from_catalog("name:Artist One", artists, albums).unwrap();
+        assert_eq!(detail.albums.len(), 1);
+        assert_eq!(detail.artist.album_count, Some(1));
+        assert_eq!(detail.artist.cover_art.as_deref(), Some("cover-one"));
+    }
+
+    #[test]
+    fn successful_artist_detail_drops_unrelated_collection_albums() {
+        let artist = Artist {
+            id: "blanck-mass".into(),
+            name: "Blanck Mass".into(),
+            album_count: Some(1),
+            cover_art: None,
+        };
+        let albums = vec![
+            Album {
+                id: "matching-name".into(),
+                name: "World Eater".into(),
+                artist: Some("Blanck Mass".into()),
+                artist_id: None,
+                cover_art: None,
+                song_count: None,
+                duration_seconds: None,
+                year: Some(2017),
+            },
+            Album {
+                id: "unrelated".into(),
+                name: "Another Purchase".into(),
+                artist: Some("Someone Else".into()),
+                artist_id: Some("someone-else".into()),
+                cover_art: None,
+                song_count: None,
+                duration_seconds: None,
+                year: None,
+            },
+        ];
+
+        let detail = scoped_artist_detail(artist, albums);
+        assert_eq!(detail.albums.len(), 1);
+        assert_eq!(detail.albums[0].id, "matching-name");
+        assert_eq!(detail.artist.album_count, Some(1));
+    }
+
+    #[test]
+    fn unattributed_artist_responses_are_detectable_as_unscoped() {
+        let albums = vec![Album {
+            id: "purchase".into(),
+            name: "Unattributed Purchase".into(),
+            artist: None,
+            artist_id: None,
+            cover_art: None,
+            song_count: None,
+            duration_seconds: None,
+            year: None,
+        }];
+
+        assert!(!albums_have_artist_attribution(&albums));
     }
 }

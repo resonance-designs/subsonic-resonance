@@ -8,6 +8,7 @@
 
 /* You can override the default Infima variables here. */
 :root {
+  --resonance-custom-font: 'Resonance Avant Garde', sans-serif;
   /* Primary sunset palette */
   --ifm-color-primary: #ff5722;
   --ifm-color-primary-dark: #f4511e;
@@ -269,13 +270,13 @@
 
 /* Enhanced link styling - override hardcoded values */
 a {
-  color: var(--ifm-link-color) !important;
+  color: var(--ifm-link-color);
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
 a:hover {
-  color: var(--ifm-link-hover-color) !important;
+  color: var(--ifm-link-hover-color);
 }
 
 /* Enhanced navbar link colors */

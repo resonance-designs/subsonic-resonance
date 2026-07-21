@@ -22,6 +22,7 @@ sidebar_position: 1
 - Filter Albums, Artists, Playlists, and Search by provider without disabling or changing any configured connection.
 - Sort the dedicated Albums page by title, artist, year, and source.
 - Browse and filter artists from every connected source, with album-count sorting and provider attribution.
+- Open provider-qualified artist pages to browse every release reported for that artist and inspect or play individual release tracks.
 - Browse server playlists from every connected source, load provider-qualified playlist tracks, and play them through the shared queue.
 - Search every connected library from the dedicated Search page.
 - Load provider-qualified album tracks and play results from Home, Albums, or Search.
@@ -29,6 +30,9 @@ sidebar_position: 1
 - Proxy cover artwork and audio without exposing credentials to the browser.
 - Stream audio through the browser with byte-range support for seeking.
 - Randomize the current queue, repeat the current track, or repeat the complete album, playlist, or search queue for the active session.
+- Persist the provider-qualified playback queue, selected track, in-track position, volume, mute, shuffle, and repeat preferences across browser reloads, with previous, next, inspect, remove, and clear controls.
+- Control playback, seeking, volume, shuffle, repeat, and the persistent queue from one unified player frame.
+- Browse other albums, playlists, searches, and application views without replacing the active queue or interrupting the current stream.
 - Run the same Leptos UI in a browser or Tauri 2 desktop shell.
 
 Home, Albums, Artists, Playlists, and Search now use the unified library service. Creating, editing, and persisting mixed-source playlists remains future work.

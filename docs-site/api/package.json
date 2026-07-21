@@ -1,6 +1,6 @@
 {
   "name": "@local/api",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "description": "Local API to serve site data derived from config YAML files",

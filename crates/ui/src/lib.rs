@@ -1,9 +1,12 @@
 use gloo_net::http::Request;
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 const API_BASE: &str = "http://127.0.0.1:3000/api";
+const QUEUE_STORAGE_KEY: &str = "resonance.playbackQueue.v1";
 
 #[derive(Clone, Copy, PartialEq)]
 enum Page {
@@ -15,8 +18,10 @@ enum Page {
     Settings,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 enum RepeatMode {
+    #[default]
     Off,
     One,
     All,
@@ -35,7 +40,7 @@ struct Provider {
     open_subsonic: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct MediaId {
     provider_id: String,
@@ -60,12 +65,18 @@ struct Album {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Artist {
-    #[allow(dead_code)]
     id: MediaId,
     name: String,
     album_count: Option<u32>,
     cover_art: Option<MediaId>,
     source_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ArtistDetailResponse {
+    artist: Artist,
+    albums: Vec<Album>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -80,7 +91,7 @@ struct Playlist {
     source_name: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Track {
     id: MediaId,
@@ -91,6 +102,24 @@ struct Track {
     duration_seconds: Option<u64>,
     track_number: Option<u32>,
     source_name: String,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QueueSnapshot {
+    version: u8,
+    tracks: Vec<Track>,
+    current: usize,
+    #[serde(default)]
+    position_seconds: f64,
+    #[serde(default = "default_volume")]
+    volume: f64,
+    #[serde(default)]
+    muted: bool,
+    #[serde(default)]
+    shuffle: bool,
+    #[serde(default)]
+    repeat: RepeatMode,
 }
 
 #[derive(Deserialize)]
@@ -143,6 +172,119 @@ fn encode(value: &str) -> String {
         .unwrap_or_default()
 }
 
+fn stream_url(track: &Track) -> String {
+    api(&format!(
+        "/providers/{}/tracks/{}/stream",
+        encode(&track.id.provider_id),
+        encode(&track.id.item_id)
+    ))
+}
+
+fn start_track_playback(track: &Track) {
+    let Some(audio) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("resonance-audio"))
+        .and_then(|element| element.dyn_into::<web_sys::HtmlAudioElement>().ok())
+    else {
+        return;
+    };
+    audio.set_src(&stream_url(track));
+    let _ = audio.play();
+}
+
+fn default_volume() -> f64 {
+    1.0
+}
+
+fn normalized_volume(volume: f64) -> f64 {
+    if volume.is_finite() {
+        volume.clamp(0.0, 1.0)
+    } else {
+        default_volume()
+    }
+}
+
+fn normalized_position(position_seconds: f64, duration_seconds: Option<u64>) -> f64 {
+    if !position_seconds.is_finite() || position_seconds < 0.0 {
+        return 0.0;
+    }
+    if duration_seconds.is_some_and(|duration| {
+        duration > 0 && position_seconds >= duration.saturating_sub(2) as f64
+    }) {
+        return 0.0;
+    }
+    position_seconds
+}
+
+fn load_queue_snapshot() -> QueueSnapshot {
+    let fallback = || QueueSnapshot {
+        version: 2,
+        tracks: Vec::new(),
+        current: 0,
+        position_seconds: 0.0,
+        volume: default_volume(),
+        muted: false,
+        shuffle: false,
+        repeat: RepeatMode::Off,
+    };
+    let Some(storage) = web_sys::window().and_then(|window| window.local_storage().ok().flatten())
+    else {
+        return fallback();
+    };
+    let Some(serialized) = storage.get_item(QUEUE_STORAGE_KEY).ok().flatten() else {
+        return fallback();
+    };
+    let Ok(mut snapshot) = serde_json::from_str::<QueueSnapshot>(&serialized) else {
+        return fallback();
+    };
+    if !matches!(snapshot.version, 1 | 2) {
+        return fallback();
+    }
+    snapshot.version = 2;
+    snapshot.current = snapshot
+        .current
+        .min(snapshot.tracks.len().saturating_sub(1));
+    snapshot.volume = normalized_volume(snapshot.volume);
+    snapshot.position_seconds = snapshot
+        .tracks
+        .get(snapshot.current)
+        .map(|track| normalized_position(snapshot.position_seconds, track.duration_seconds))
+        .unwrap_or(0.0);
+    snapshot
+}
+
+fn persist_playback(
+    tracks: &[Track],
+    current: usize,
+    position_seconds: f64,
+    volume: f64,
+    muted: bool,
+    shuffle: bool,
+    repeat: RepeatMode,
+) {
+    let Some(storage) = web_sys::window().and_then(|window| window.local_storage().ok().flatten())
+    else {
+        return;
+    };
+    let current = current.min(tracks.len().saturating_sub(1));
+    let snapshot = QueueSnapshot {
+        version: 2,
+        tracks: tracks.to_vec(),
+        current,
+        position_seconds: tracks
+            .get(current)
+            .map(|track| normalized_position(position_seconds, track.duration_seconds))
+            .unwrap_or(0.0),
+        volume: normalized_volume(volume),
+        muted,
+        shuffle,
+        repeat,
+    };
+    if let Ok(serialized) = serde_json::to_string(&snapshot) {
+        let _ = storage.set_item(QUEUE_STORAGE_KEY, &serialized);
+    }
+}
+
 async fn get_json<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
     let response = Request::get(&api(path))
         .send()
@@ -163,8 +305,6 @@ async fn get_json<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String>
 
 async fn load_library(
     albums: RwSignal<Vec<Album>>,
-    tracks: RwSignal<Vec<Track>>,
-    current: RwSignal<usize>,
     loading: RwSignal<bool>,
     issues: RwSignal<Vec<ProviderIssue>>,
     error: RwSignal<Option<String>>,
@@ -173,20 +313,11 @@ async fn load_library(
     error.set(None);
     match get_json::<AggregateResponse<Album>>("/library/albums?limit=500").await {
         Ok(response) => {
-            let first = response.items.first().map(|album| album.id.clone());
             albums.set(response.items);
             issues.set(response.issues);
-            if let Some(id) = first {
-                load_album_tracks(id, tracks, current, loading, error).await;
-            } else {
-                tracks.set(Vec::new());
-                current.set(0);
-            }
         }
         Err(message) => {
             albums.set(Vec::new());
-            tracks.set(Vec::new());
-            current.set(0);
             issues.set(Vec::new());
             error.set(Some(message));
         }
@@ -234,7 +365,7 @@ fn Nav(active: RwSignal<Page>, providers: RwSignal<Vec<Provider>>) -> impl IntoV
 fn Home(
     providers: RwSignal<Vec<Provider>>,
     albums: RwSignal<Vec<Album>>,
-    tracks: RwSignal<Vec<Track>>,
+    queue: RwSignal<Vec<Track>>,
     current: RwSignal<usize>,
     playing: RwSignal<bool>,
     loading: RwSignal<bool>,
@@ -242,6 +373,7 @@ fn Home(
     error: RwSignal<Option<String>>,
 ) -> impl IntoView {
     let query = RwSignal::new(String::new());
+    let browse_tracks = RwSignal::new(Vec::<Track>::new());
     let run_search = move |_| {
         let term = query.get();
         if term.trim().is_empty() {
@@ -257,7 +389,7 @@ fn Home(
             .await
             {
                 Ok(response) => {
-                    tracks.set(response.items);
+                    browse_tracks.set(response.items);
                     issues.set(response.issues)
                 }
                 Err(message) => error.set(Some(message)),
@@ -271,13 +403,11 @@ fn Home(
             <Show when=move||loading.get()><p class="library-state">"Loading connected libraries…"</p></Show>
             <Show when=move||error.get().is_some()>{move||error.get().map(|message|view!{<div class="library-error"><b>"Could not load the unified library"</b><p>{message}</p></div>})}</Show>
             <Show when=move||!issues.get().is_empty()>{move||issues.get().into_iter().map(|issue|view!{<div class="library-error partial"><b>{format!("{} is unavailable",issue.provider_name)}</b><p>{issue.message}</p></div>}).collect_view()}</Show>
-            <Show when=move||!albums.get().is_empty()>{move||albums.get().first().cloned().map(|album|view!{<section class="feature real-feature"><Artwork cover=album.cover_art.clone() title=album.name.clone() class="feature-art"/><div class="feature-copy"><p class="eyebrow coral">"FROM THE UNIFIED LIBRARY"</p><h2>{album.name}</h2><p class="feature-artist">{format!("{} · {}",album.artist.unwrap_or_else(||"Unknown artist".into()),album.source_name)}</p><p class="description">{format!("{} tracks",album.song_count.unwrap_or(0))}</p></div></section>})}</Show>
+            <Show when=move||!albums.get().is_empty()>{move||albums.get().first().cloned().map(|album|view!{<section class="feature real-feature"><Artwork cover=album.cover_art.clone() title=album.name.clone() class="feature-art"/><div class="feature-copy"><p class="eyebrow">"FROM THE UNIFIED LIBRARY"</p><h2>{album.name}</h2><p class="feature-artist">{format!("{} · {}",album.artist.unwrap_or_else(||"Unknown artist".into()),album.source_name)}</p><p class="description">{format!("{} tracks",album.song_count.unwrap_or(0))}</p></div></section>})}</Show>
             <section class="recent"><div class="section-title"><div><p class="eyebrow">"ALL SOURCES"</p><h2>"Albums"</h2></div><span class="track-count">{move||format!("{} ALBUMS",albums.get().len())}</span></div><div class="album-row real-albums">
-                {move||albums.get().into_iter().map(|album|{let id=album.id.clone();view!{<button class="album" on:click=move |_|{let id=id.clone();loading.set(true);spawn_local(async move{match get_json::<AlbumDetail>(&format!("/library/albums/{}/{}",encode(&id.provider_id),encode(&id.item_id))).await{Ok(detail)=>tracks.set(detail.tracks),Err(message)=>error.set(Some(message))}loading.set(false);});}><Artwork cover=album.cover_art.clone() title=album.name.clone()/><strong>{album.name}</strong><span>{format!("{} · {}",album.artist.unwrap_or_else(||"Unknown artist".into()),album.source_name)}</span></button>}}).collect_view()}
+                {move||albums.get().into_iter().map(|album|{let id=album.id.clone();view!{<button class="album" on:click=move |_|{let id=id.clone();loading.set(true);spawn_local(async move{match get_json::<AlbumDetail>(&format!("/library/albums/{}/{}",encode(&id.provider_id),encode(&id.item_id))).await{Ok(detail)=>browse_tracks.set(detail.tracks),Err(message)=>error.set(Some(message))}loading.set(false);});}><Artwork cover=album.cover_art.clone() title=album.name.clone()/><strong>{album.name}</strong><span>{format!("{} · {}",album.artist.unwrap_or_else(||"Unknown artist".into()),album.source_name)}</span></button>}}).collect_view()}
             </div></section>
-            <section class="tracks"><div class="section-title"><div><p class="eyebrow">"SELECTED ALBUM / SEARCH"</p><h2>"Tracks"</h2></div><span class="track-count">{move||format!("{} TRACKS",tracks.get().len())}</span></div><div class="track-list">
-                {move||tracks.get().into_iter().enumerate().map(|(idx,track)|view!{<button class:current=move||current.get()==idx on:click=move |_|{current.set(idx);playing.set(true)}><span class="track-no">{track.track_number.map(|n|format!("{n:02}")).unwrap_or_else(||"—".into())}</span><span class="mini-cover"></span><span class="track-name"><b>{track.title}</b><small>{format!("{} · {}",track.artist.unwrap_or_else(||"Unknown artist".into()),track.source_name)}</small></span><span class="track-album">{track.album.unwrap_or_default()}</span><span class="track-time">{format_duration(track.duration_seconds)}</span></button>}).collect_view()}
-            </div></section>
+            <section class="tracks"><div class="section-title"><div><p class="eyebrow">"SELECTED ALBUM / SEARCH"</p><h2>"Tracks"</h2></div><span class="track-count">{move||format!("{} TRACKS",browse_tracks.get().len())}</span></div><TrackResults items=browse_tracks queue current playing empty_message="Select an album or search to browse tracks."/></section>
         </Show>
     </main>}
 }
@@ -291,7 +421,6 @@ fn format_duration(seconds: Option<u64>) -> String {
 async fn load_album_tracks(
     id: MediaId,
     tracks: RwSignal<Vec<Track>>,
-    current: RwSignal<usize>,
     loading: RwSignal<bool>,
     error: RwSignal<Option<String>>,
 ) {
@@ -304,10 +433,7 @@ async fn load_album_tracks(
     ))
     .await
     {
-        Ok(detail) => {
-            tracks.set(detail.tracks);
-            current.set(0);
-        }
+        Ok(detail) => tracks.set(detail.tracks),
         Err(message) => error.set(Some(message)),
     }
     loading.set(false);
@@ -352,11 +478,13 @@ fn TrackResults(
             <div class="track-list">
                 {move || items.get().into_iter().enumerate().map(|(idx, track)| {
                     let result_items = items;
+                    let playback_track = track.clone();
                     view! {
                         <button on:click=move |_| {
                             queue.set(result_items.get());
                             current.set(idx);
                             playing.set(true);
+                            start_track_playback(&playback_track);
                         }>
                             <span class="track-no">{track.track_number.map(|number| format!("{number:02}")).unwrap_or_else(|| "—".into())}</span>
                             <span class="mini-cover"></span>
@@ -386,6 +514,7 @@ fn AlbumsPage(
     let sort = RwSignal::new(String::from("title"));
     let source = RwSignal::new(String::new());
     let selected = RwSignal::new(None::<MediaId>);
+    let album_tracks = RwSignal::new(Vec::<Track>::new());
     let visible_albums = move || {
         let needle = filter.get().trim().to_lowercase();
         let mut items = albums.get();
@@ -441,17 +570,17 @@ fn AlbumsPage(
                 <div class="album-grid">{move || visible_albums().into_iter().map(|album| {
                     let id = album.id.clone();
                     let selected_id = id.clone();
-                    view! {<button class="album-card" class:selected=move || selected.get().as_ref() == Some(&selected_id) disabled=move || loading.get() on:click=move |_| {
+                    view! {<button class="media-card album-card" class:selected=move || selected.get().as_ref() == Some(&selected_id) disabled=move || loading.get() on:click=move |_| {
                         if loading.get_untracked() {
                             return;
                         }
                         loading.set(true);
                         selected.set(Some(id.clone()));
-                        spawn_local(load_album_tracks(id.clone(), tracks, current, loading, error));
+                        spawn_local(load_album_tracks(id.clone(), album_tracks, loading, error));
                     }><Artwork cover=album.cover_art.clone() title=album.name.clone()/><strong>{album.name}</strong><span>{album.artist.unwrap_or_else(|| "Unknown artist".into())}</span><small>{format!("{}{}", album.source_name, album.year.map(|year| format!(" · {year}")).unwrap_or_default())}</small></button>}
                 }).collect_view()}</div>
             </Show>
-            <section class="tracks page-tracks"><div class="section-title"><div><p class="eyebrow">"SELECTED ALBUM"</p><h2>"Tracks"</h2></div><span class="track-count">{move || if selected.get().is_some() { format!("{} TRACKS", tracks.get().len()) } else { "0 TRACKS".into() }}</span></div><Show when=move || selected.get().is_some() fallback=move || view! {<div class="empty-results"><p>"Select an album to view its tracks."</p></div>}><TrackResults items=tracks queue=tracks current playing empty_message="This album did not return any tracks."/></Show></section>
+            <section class="tracks page-tracks"><div class="section-title"><div><p class="eyebrow">"SELECTED ALBUM"</p><h2>"Tracks"</h2></div><span class="track-count">{move || if selected.get().is_some() { format!("{} TRACKS", album_tracks.get().len()) } else { "0 TRACKS".into() }}</span></div><Show when=move || selected.get().is_some() fallback=move || view! {<div class="empty-results"><p>"Select an album to view its tracks."</p></div>}><TrackResults items=album_tracks queue=tracks current playing empty_message="This album did not return any tracks."/></Show></section>
         </Show>
     </main>}
 }
@@ -465,7 +594,12 @@ struct PlaylistDetail {
 }
 
 #[component]
-fn ArtistsPage(providers: RwSignal<Vec<Provider>>) -> impl IntoView {
+fn ArtistsPage(
+    providers: RwSignal<Vec<Provider>>,
+    queue: RwSignal<Vec<Track>>,
+    current: RwSignal<usize>,
+    playing: RwSignal<bool>,
+) -> impl IntoView {
     let artists = RwSignal::new(Vec::<Artist>::new());
     let issues = RwSignal::new(Vec::<ProviderIssue>::new());
     let loading = RwSignal::new(false);
@@ -473,17 +607,27 @@ fn ArtistsPage(providers: RwSignal<Vec<Provider>>) -> impl IntoView {
     let filter = RwSignal::new(String::new());
     let sort = RwSignal::new(String::from("name"));
     let source = RwSignal::new(String::new());
+    let request_generation = RwSignal::new(0_u64);
+    let selected_artist = RwSignal::new(None::<Artist>);
 
     Effect::new(move |_| {
+        let generation = request_generation.get_untracked().wrapping_add(1);
+        request_generation.set(generation);
         if providers.get().is_empty() {
             artists.set(Vec::new());
             issues.set(Vec::new());
+            error.set(None);
+            loading.set(false);
             return;
         }
         loading.set(true);
         error.set(None);
         spawn_local(async move {
-            match get_json::<AggregateResponse<Artist>>("/library/artists?limit=500").await {
+            let result = get_json::<AggregateResponse<Artist>>("/library/artists?limit=500").await;
+            if request_generation.get_untracked() != generation {
+                return;
+            }
+            match result {
                 Ok(response) => {
                     artists.set(response.items);
                     issues.set(response.issues);
@@ -524,23 +668,98 @@ fn ArtistsPage(providers: RwSignal<Vec<Provider>>) -> impl IntoView {
         items
     };
 
-    view! {<main class="content library-page artists-page">
-        <header><p class="eyebrow">"UNIFIED LIBRARY"</p><h1>"Artists"</h1><p>"Browse artists from every connected source."</p></header>
-        <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings to browse artists."</p></section>}>
-            <div class="library-toolbar">
-                <label><span>"Filter artists"</span><input type="search" placeholder="Artist or source" on:input=move |event| filter.set(event_target_value(&event))/></label>
-                <SourceFilter providers selected=source/>
-                <label><span>"Sort by"</span><select on:change=move |event| sort.set(event_target_value(&event))><option value="name">"Name"</option><option value="albums">"Album count"</option></select></label>
-            </div>
-            <Show when=move || loading.get()><p class="library-state">"Loading artists…"</p></Show>
-            <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Could not load artists"</b><p>{message}</p></div>})}</Show>
-            <ProviderNotices issues/>
-            <div class="section-title"><div><p class="eyebrow">"ALL SOURCES"</p><h2>"Artists"</h2></div><span class="track-count">{move || format!("{} SHOWN", visible_artists().len())}</span></div>
-            <Show when=move || !visible_artists().is_empty() fallback=move || view! {<div class="empty-results"><p>"No artists match this filter."</p></div>}>
-                <div class="artist-grid">{move || visible_artists().into_iter().map(|artist| view! {
-                    <article class="artist-card"><Artwork cover=artist.cover_art title=artist.name.clone()/><strong>{artist.name}</strong><span>{artist.album_count.map(|count| format!("{count} albums")).unwrap_or_else(|| "Album count unavailable".into())}</span><small>{artist.source_name}</small></article>
+    view! {
+        <Show
+            when=move || selected_artist.get().is_some()
+            fallback=move || view! {<main class="content library-page artists-page">
+                <header class="editorial-head"><div><p class="eyebrow">"UNIFIED LIBRARY"</p><h1>"Artists"</h1><p>"Browse artists from every connected source."</p></div></header>
+                <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings to browse artists."</p></section>}>
+                    <div class="library-toolbar">
+                        <label><span>"Filter artists"</span><input type="search" placeholder="Artist or source" on:input=move |event| filter.set(event_target_value(&event))/></label>
+                        <SourceFilter providers selected=source/>
+                        <label><span>"Sort by"</span><select on:change=move |event| sort.set(event_target_value(&event))><option value="name">"Name"</option><option value="albums">"Album count"</option></select></label>
+                    </div>
+                    <Show when=move || loading.get()><p class="library-state">"Loading artists…"</p></Show>
+                    <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Could not load artists"</b><p>{message}</p></div>})}</Show>
+                    <ProviderNotices issues/>
+                    <div class="section-title"><div><p class="eyebrow">"ALL SOURCES"</p><h2>"Artists"</h2></div><span class="track-count">{move || format!("{} SHOWN", visible_artists().len())}</span></div>
+                    <Show when=move || !visible_artists().is_empty() fallback=move || view! {<div class="empty-results"><p>"No artists match this filter."</p></div>}>
+                        <div class="artist-grid">{move || visible_artists().into_iter().map(|artist| {
+                            let selected = artist.clone();
+                            view! {<button class="media-card artist-card" on:click=move |_| selected_artist.set(Some(selected.clone()))><Artwork cover=artist.cover_art title=artist.name.clone()/><strong>{artist.name}</strong><span>{artist.album_count.map(|count| format!("{count} albums")).unwrap_or_else(|| "Album count unavailable".into())}</span><small>{artist.source_name}</small></button>}
+                        }).collect_view()}</div>
+                    </Show>
+                </Show>
+            </main>}
+        >
+            {move || selected_artist.get().map(|artist| view! {<ArtistDetailPage artist selected_artist queue current playing/>})}
+        </Show>
+    }
+}
+
+#[component]
+fn ArtistDetailPage(
+    artist: Artist,
+    selected_artist: RwSignal<Option<Artist>>,
+    queue: RwSignal<Vec<Track>>,
+    current: RwSignal<usize>,
+    playing: RwSignal<bool>,
+) -> impl IntoView {
+    let artist_id = artist.id.clone();
+    let artist_name = artist.name.clone();
+    let artist_source = artist.source_name.clone();
+    let artist_cover = artist.cover_art.clone();
+    let releases = RwSignal::new(Vec::<Album>::new());
+    let album_tracks = RwSignal::new(Vec::<Track>::new());
+    let selected_album = RwSignal::new(None::<MediaId>);
+    let loading = RwSignal::new(true);
+    let album_loading = RwSignal::new(false);
+    let error = RwSignal::new(None::<String>);
+
+    spawn_local(async move {
+        match get_json::<ArtistDetailResponse>(&format!(
+            "/library/artists/{}/{}",
+            encode(&artist_id.provider_id),
+            encode(&artist_id.item_id)
+        ))
+        .await
+        {
+            Ok(mut detail) => {
+                detail.albums.sort_by_key(|album| {
+                    (
+                        std::cmp::Reverse(album.year.unwrap_or(0)),
+                        album.name.to_lowercase(),
+                    )
+                });
+                releases.set(detail.albums);
+            }
+            Err(message) => error.set(Some(message)),
+        }
+        loading.set(false);
+    });
+
+    view! {<main class="content library-page artist-detail-page">
+        <button type="button" class="detail-back" on:click=move |_| selected_artist.set(None)>"← All artists"</button>
+        <header class="artist-detail-head">
+            <Artwork cover=artist_cover title=artist_name.clone() class="artist-detail-art"/>
+            <div><p class="eyebrow">"ARTIST · UNIFIED LIBRARY"</p><h1>{artist_name}</h1><p>{artist_source}</p></div>
+        </header>
+        <Show when=move || loading.get()><p class="library-state">"Loading artist releases…"</p></Show>
+        <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Could not load this artist"</b><p>{message}</p></div>})}</Show>
+        <Show when=move || !loading.get() && error.get().is_none()>
+            <div class="section-title"><div><p class="eyebrow">"DISCOGRAPHY"</p><h2>"Releases"</h2></div><span class="track-count">{move || format!("{} RELEASES", releases.get().len())}</span></div>
+            <Show when=move || !releases.get().is_empty() fallback=move || view! {<div class="empty-results"><p>"This provider did not return any releases for the artist."</p></div>}>
+                <div class="album-grid">{move || releases.get().into_iter().map(|album| {
+                    let id = album.id.clone();
+                    let selected_id = id.clone();
+                    view! {<button class="media-card album-card" class:selected=move || selected_album.get().as_ref() == Some(&selected_id) disabled=move || album_loading.get() on:click=move |_| {
+                        if album_loading.get_untracked() { return; }
+                        selected_album.set(Some(id.clone()));
+                        spawn_local(load_album_tracks(id.clone(), album_tracks, album_loading, error));
+                    }><Artwork cover=album.cover_art.clone() title=album.name.clone()/><strong>{album.name}</strong><span>{album.artist.unwrap_or_else(|| "Unknown artist".into())}</span><small>{format!("{}{}", album.source_name, album.year.map(|year| format!(" · {year}")).unwrap_or_default())}</small></button>}
                 }).collect_view()}</div>
             </Show>
+            <section class="tracks page-tracks"><div class="section-title"><div><p class="eyebrow">"SELECTED RELEASE"</p><h2>"Tracks"</h2></div><span class="track-count">{move || if selected_album.get().is_some() { format!("{} TRACKS", album_tracks.get().len()) } else { "0 TRACKS".into() }}</span></div><Show when=move || selected_album.get().is_some() fallback=move || view! {<div class="empty-results"><p>"Select a release to view its tracks."</p></div>}><TrackResults items=album_tracks queue current playing empty_message="This release did not return any tracks."/></Show></section>
         </Show>
     </main>}
 }
@@ -560,18 +779,27 @@ fn PlaylistsPage(
     let selected = RwSignal::new(None::<MediaId>);
     let filter = RwSignal::new(String::new());
     let source = RwSignal::new(String::new());
+    let request_generation = RwSignal::new(0_u64);
 
     Effect::new(move |_| {
+        let generation = request_generation.get_untracked().wrapping_add(1);
+        request_generation.set(generation);
         if providers.get().is_empty() {
             playlists.set(Vec::new());
             playlist_tracks.set(Vec::new());
             issues.set(Vec::new());
+            error.set(None);
+            loading.set(false);
             return;
         }
         loading.set(true);
         error.set(None);
         spawn_local(async move {
-            match get_json::<AggregateResponse<Playlist>>("/library/playlists").await {
+            let result = get_json::<AggregateResponse<Playlist>>("/library/playlists").await;
+            if request_generation.get_untracked() != generation {
+                return;
+            }
+            match result {
                 Ok(response) => {
                     playlists.set(response.items);
                     issues.set(response.issues);
@@ -610,7 +838,7 @@ fn PlaylistsPage(
     };
 
     view! {<main class="content library-page playlists-page">
-        <header><p class="eyebrow">"UNIFIED LIBRARY"</p><h1>"Playlists"</h1><p>"Browse server playlists without changing the active source."</p></header>
+        <header class="editorial-head"><div><p class="eyebrow">"UNIFIED LIBRARY"</p><h1>"Playlists"</h1><p>"Browse server playlists without changing the active source."</p></div></header>
         <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings to browse playlists."</p></section>}>
             <div class="library-toolbar playlist-toolbar"><label><span>"Filter playlists"</span><input type="search" placeholder="Name, owner, or source" on:input=move |event| filter.set(event_target_value(&event))/></label><SourceFilter providers selected=source/></div>
             <Show when=move || loading.get()><p class="library-state">"Loading playlists…"</p></Show>
@@ -622,7 +850,7 @@ fn PlaylistsPage(
                     let id = playlist.id.clone();
                     let selected_id = id.clone();
                     let duration = format_duration(playlist.duration_seconds);
-                    view! {<button class="playlist-card" class:selected=move || selected.get().as_ref() == Some(&selected_id) disabled=move || loading.get() on:click=move |_| {
+                    view! {<button class="media-card playlist-card" class:selected=move || selected.get().as_ref() == Some(&selected_id) disabled=move || loading.get() on:click=move |_| {
                         if loading.get_untracked() { return; }
                         loading.set(true);
                         error.set(None);
@@ -630,7 +858,7 @@ fn PlaylistsPage(
                         let request_id = id.clone();
                         spawn_local(async move {
                             match get_json::<PlaylistDetail>(&format!("/library/playlists/{}/{}", encode(&request_id.provider_id), encode(&request_id.item_id))).await {
-                                Ok(detail) => { playlist_tracks.set(detail.tracks); current.set(0); }
+                                Ok(detail) => playlist_tracks.set(detail.tracks),
                                 Err(message) => error.set(Some(message)),
                             }
                             loading.set(false);
@@ -700,7 +928,7 @@ fn SearchPage(
     };
 
     view! {<main class="content library-page search-page">
-        <header><p class="eyebrow">"ALL CONNECTED SOURCES"</p><h1>"Search"</h1><p>"Find tracks across the complete unified library."</p></header>
+        <header class="editorial-head"><div><p class="eyebrow">"ALL CONNECTED SOURCES"</p><h1>"Search"</h1><p>"Find tracks across the complete unified library."</p></div></header>
         <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings before searching."</p></section>}>
             <div class="search-toolbar"><form class="library-search" on:submit=move |event| {event.prevent_default(); submit(())}><span>"⌕"</span><input autofocus type="search" aria-label="Search all connected sources" placeholder="Track, artist, or album" on:input=move |event| query.set(event_target_value(&event))/><button class="primary" type="submit" disabled=move || loading.get()>{move || if loading.get() {"Searching…"} else {"Search"}}</button></form><SourceFilter providers selected=source/></div>
             <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Search failed"</b><p>{message}</p></div>})}</Show>
@@ -718,7 +946,7 @@ fn Settings(providers: RwSignal<Vec<Provider>>) -> impl IntoView {
     let connections = RwSignal::new(true);
     let dialog = RwSignal::new(false);
     let action_error = RwSignal::new(None::<String>);
-    view! {<main class="content settings"><header><p class="eyebrow coral">"SYSTEM & SOURCES"</p><h1>"Settings"</h1><p>"Every connection is available throughout Resonance."</p></header><div class="settings-tabs" role="tablist"><button role="tab" aria-selected=move||(!connections.get()).to_string() class:active=move||!connections.get() on:click=move |_|connections.set(false)>"General"</button><button role="tab" aria-selected=move||connections.get().to_string() class:active=move||connections.get() on:click=move |_|connections.set(true)>"Connections"</button></div>
+    view! {<main class="content settings"><header class="editorial-head"><div><p class="eyebrow">"SYSTEM & SOURCES"</p><h1>"Settings"</h1><p>"Every connection is available throughout Resonance."</p></div></header><div class="settings-tabs" role="tablist"><button role="tab" aria-selected=move||(!connections.get()).to_string() class:active=move||!connections.get() on:click=move |_|connections.set(false)>"General"</button><button role="tab" aria-selected=move||connections.get().to_string() class:active=move||connections.get() on:click=move |_|connections.set(true)>"Connections"</button></div>
         <Show when=move||connections.get() fallback=||view!{<section class="general"><div class="preference"><div><b>"Streaming quality"</b><small>"Server transcoding preferences are coming next."</small></div><select><option>"Original"</option></select></div></section>}>
             <section class="connections"><div class="connections-head"><div><p class="eyebrow">"LIVE PROVIDERS"</p><h2>"Connections"</h2><p>"All connected providers participate in the unified library."</p></div><button class="primary" on:click=move |_|dialog.set(true)>"＋ Add Provider"</button></div>
             <Show when=move||action_error.get().is_some()>{move||action_error.get().map(|e|view!{<div class="library-error"><p>{e}</p></div>})}</Show>
@@ -749,7 +977,79 @@ fn ProviderDialog(
             }
         }
     });
-    view! {<Show when=move||open.get()><dialog node_ref=dialog_ref class="dialog provider-dialog" on:cancel=move|_:leptos::ev::Event|open.set(false)><button class="dialog-close" on:click=move |_|open.set(false)>"×"</button><p class="eyebrow coral">"NEW CONNECTION"</p><h2>"Add Provider"</h2><p>"Resonance will verify these details before saving the connection."</p><form on:submit=move|ev|{ev.prevent_default();saving.set(true);error.set(None);let request=RegisterProvider{name:name.get(),url:url.get(),username:Some(username.get()),auth:if api_key.get(){AuthMethod::ApiKey}else{AuthMethod::Password},secret:secret.get()};spawn_local(async move{let builder=match Request::post(&api("/providers")).json(&request){Ok(v)=>v,Err(e)=>{error.set(Some(e.to_string()));saving.set(false);return}};match builder.send().await{Ok(response) if response.ok()=>match response.json::<Provider>().await{Ok(provider)=>{providers.update(|items|items.push(provider));secret.set(String::new());open.set(false)},Err(e)=>error.set(Some(e.to_string()))},Ok(response)=>error.set(Some(response.text().await.unwrap_or_else(|_|"Connection failed".into()))),Err(e)=>error.set(Some(format!("Cannot reach backend: {e}")))}saving.set(false);});}><label>"Name"<input autofocus required placeholder="Home library" on:input=move|e|name.set(event_target_value(&e))/></label><label>"Server URL"<input required type="url" placeholder="https://music.example.com" on:input=move|e|url.set(event_target_value(&e))/></label><label>"Username"<input required=!api_key.get() autocomplete="username" on:input=move|e|username.set(event_target_value(&e))/></label><div class="auth-toggle"><button type="button" class:active=move||!api_key.get() on:click=move |_|api_key.set(false)>"Password"</button><button type="button" class:active=move||api_key.get() on:click=move |_|api_key.set(true)>"API Key"</button></div><label>{move||if api_key.get(){"API Key"}else{"Password"}}<input required type="password" autocomplete="new-password" on:input=move|e|secret.set(event_target_value(&e))/></label><p class="security">"Credentials are sent to the local Rust backend and are not stored in browser storage."</p><div class="dialog-actions"><button type="button" on:click=move |_|open.set(false)>"Cancel"</button><button class="primary" type="submit" disabled=move||saving.get()>{move||if saving.get(){"Connecting…"}else{"Save Provider"}}</button></div></form></dialog></Show>}
+    view! {<Show when=move||open.get()><dialog node_ref=dialog_ref class="dialog provider-dialog" on:cancel=move|_:leptos::ev::Event|open.set(false)><button class="dialog-close" on:click=move |_|open.set(false)>"×"</button><p class="eyebrow">"NEW CONNECTION"</p><h2>"Add Provider"</h2><p>"Resonance will verify these details before saving the connection."</p><form on:submit=move|ev|{ev.prevent_default();saving.set(true);error.set(None);let request=RegisterProvider{name:name.get(),url:url.get(),username:Some(username.get()),auth:if api_key.get(){AuthMethod::ApiKey}else{AuthMethod::Password},secret:secret.get()};spawn_local(async move{let builder=match Request::post(&api("/providers")).json(&request){Ok(v)=>v,Err(e)=>{error.set(Some(e.to_string()));saving.set(false);return}};match builder.send().await{Ok(response) if response.ok()=>match response.json::<Provider>().await{Ok(provider)=>{providers.update(|items|items.push(provider));secret.set(String::new());open.set(false)},Err(e)=>error.set(Some(e.to_string()))},Ok(response)=>error.set(Some(response.text().await.unwrap_or_else(|_|"Connection failed".into()))),Err(e)=>error.set(Some(format!("Cannot reach backend: {e}")))}saving.set(false);});}><label>"Name"<input autofocus required placeholder="Home library" on:input=move|e|name.set(event_target_value(&e))/></label><label>"Server URL"<input required type="url" placeholder="https://music.example.com" on:input=move|e|url.set(event_target_value(&e))/></label><label>"Username"<input required=!api_key.get() autocomplete="username" on:input=move|e|username.set(event_target_value(&e))/></label><div class="auth-toggle"><button type="button" class:active=move||!api_key.get() on:click=move |_|api_key.set(false)>"Password"</button><button type="button" class:active=move||api_key.get() on:click=move |_|api_key.set(true)>"API Key"</button></div><label>{move||if api_key.get(){"API Key"}else{"Password"}}<input required type="password" autocomplete="new-password" on:input=move|e|secret.set(event_target_value(&e))/></label><p class="security">"Credentials are sent to the local Rust backend and are not stored in browser storage."</p><div class="dialog-actions"><button type="button" on:click=move |_|open.set(false)>"Cancel"</button><button class="primary" type="submit" disabled=move||saving.get()>{move||if saving.get(){"Connecting…"}else{"Save Provider"}}</button></div></form></dialog></Show>}
+}
+
+fn next_queue_index(
+    len: usize,
+    index: usize,
+    shuffle: bool,
+    repeat: RepeatMode,
+    random: f64,
+) -> Option<usize> {
+    if len == 0 {
+        return None;
+    }
+    if shuffle && len > 1 {
+        if repeat == RepeatMode::All {
+            let offset = (random * (len - 1) as f64).floor() as usize + 1;
+            return Some((index + offset) % len);
+        }
+        if index + 1 < len {
+            let remaining = len - index - 1;
+            let offset = (random * remaining as f64).floor() as usize + 1;
+            return Some(index + offset);
+        }
+        return None;
+    }
+    if index + 1 < len {
+        Some(index + 1)
+    } else if repeat == RepeatMode::All {
+        Some(0)
+    } else {
+        None
+    }
+}
+
+fn player_time(seconds: f64) -> String {
+    if !seconds.is_finite() || seconds < 0.0 {
+        return "0:00".into();
+    }
+    let seconds = seconds.floor() as u64;
+    format!("{}:{:02}", seconds / 60, seconds % 60)
+}
+
+fn shuffle_icon() -> impl IntoView {
+    view! {
+        <svg class="player-mode-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M16 3h5v5M4 20l5-5M15 15l6 6M21 16v5h-5M4 4l5 5M15 9l6-6"/>
+        </svg>
+    }
+}
+
+fn repeat_icon(mode: RepeatMode) -> impl IntoView {
+    view! {
+        <svg class="player-mode-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="m17 2 4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3"/>
+            <Show when=move || mode == RepeatMode::One>
+                <text class="repeat-one" x="12" y="15">"1"</text>
+            </Show>
+        </svg>
+    }
+}
+
+fn volume_icon(is_muted: bool) -> impl IntoView {
+    view! {
+        <svg class="player-mode-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M11 5 6 9H2v6h4l5 4V5Z"/>
+            <Show
+                when=move || !is_muted
+                fallback=|| view! {<path d="m16 9 5 5M21 9l-5 5"/>}
+            >
+                <path d="M15 9.5a4 4 0 0 1 0 5M18 7a7 7 0 0 1 0 10"/>
+            </Show>
+        </svg>
+    }
 }
 
 #[component]
@@ -757,14 +1057,141 @@ fn Player(
     tracks: RwSignal<Vec<Track>>,
     current: RwSignal<usize>,
     playing: RwSignal<bool>,
+    position: RwSignal<f64>,
+    volume: RwSignal<f64>,
+    muted: RwSignal<bool>,
+    shuffle: RwSignal<bool>,
+    repeat: RwSignal<RepeatMode>,
 ) -> impl IntoView {
     let track = move || tracks.get().get(current.get()).cloned();
-    let shuffle = RwSignal::new(false);
-    let repeat = RwSignal::new(RepeatMode::Off);
-    view! {<footer class="player real-player"><div class="now"><div><b>{move||track().map(|t|t.title).unwrap_or_else(||"Nothing playing".into())}</b><span>{move||track().map(|t|format!("{} · {}",t.artist.unwrap_or_default(),t.source_name)).unwrap_or_default()}</span></div></div><div class="transport">{move||track().map(|t|{let src=api(&format!("/providers/{}/tracks/{}/stream",encode(&t.id.provider_id),encode(&t.id.item_id)));view!{<audio controls autoplay=playing.get() src=src on:play=move |_| playing.set(true) on:pause=move |_| playing.set(false) on:ended=move |event| {
+    let queue_open = RwSignal::new(false);
+    let duration = RwSignal::new(0.0_f64);
+    let persisted_second = RwSignal::new(position.get_untracked().floor().max(0.0) as u64);
+    let audio_ref = NodeRef::<leptos::html::Audio>::new();
+
+    Effect::new(move |_| {
+        let should_play = playing.get();
+        let desired_source = tracks
+            .get()
+            .get(current.get())
+            .map(stream_url)
+            .unwrap_or_default();
+        if let Some(audio) = audio_ref.get() {
+            if audio.get_attribute("src").unwrap_or_default() != desired_source {
+                if desired_source.is_empty() {
+                    let _ = audio.remove_attribute("src");
+                } else {
+                    audio.set_src(&desired_source);
+                }
+                audio.load();
+                duration.set(0.0);
+            }
+            if should_play {
+                let _ = audio.play();
+            } else {
+                audio.pause().ok();
+            }
+        }
+    });
+
+    let previous = move |_| {
+        let len = tracks.get_untracked().len();
+        let index = current.get_untracked();
+        if index > 0 {
+            current.set(index - 1);
+            playing.set(true);
+        } else if len > 0 && repeat.get_untracked() == RepeatMode::All {
+            current.set(len - 1);
+            playing.set(true);
+        }
+    };
+    let next = move |_| {
+        let next = next_queue_index(
+            tracks.get_untracked().len(),
+            current.get_untracked(),
+            shuffle.get_untracked(),
+            repeat.get_untracked(),
+            js_sys::Math::random(),
+        );
+        if let Some(next) = next {
+            current.set(next);
+            playing.set(true);
+        } else {
+            playing.set(false);
+        }
+    };
+    view! {<footer class="player real-player">
+        <Show when=move || queue_open.get()>
+            <aside class="queue-panel" aria-label="Playback queue">
+                <header><div><p class="eyebrow">"PLAYBACK"</p><h2>"Queue"</h2></div><div><span>{move || format!("{} TRACKS", tracks.get().len())}</span><button type="button" on:click=move |_| queue_open.set(false) aria-label="Close playback queue">"×"</button></div></header>
+                <Show when=move || !tracks.get().is_empty() fallback=move || view! {<div class="queue-empty">"The playback queue is empty."</div>}>
+                    <div class="queue-items">{move || tracks.get().into_iter().enumerate().map(|(idx, item)| {
+                        let playback_track = item.clone();
+                        view! {
+                        <div class="queue-item" class:current=move || current.get() == idx>
+                            <button type="button" class="queue-select" on:click=move |_| { current.set(idx); playing.set(true); start_track_playback(&playback_track); }><span>{format!("{:02}", idx + 1)}</span><span><b>{item.title}</b><small>{format!("{} · {}", item.artist.unwrap_or_else(|| "Unknown artist".into()), item.source_name)}</small></span></button>
+                            <button type="button" class="queue-remove" aria-label="Remove track from queue" on:click=move |_| {
+                                let old_current = current.get_untracked();
+                                tracks.update(|items| { if idx < items.len() { items.remove(idx); } });
+                                let len = tracks.get_untracked().len();
+                                if len == 0 { current.set(0); playing.set(false); }
+                                else if idx < old_current { current.set(old_current - 1); }
+                                else if old_current >= len { current.set(len - 1); }
+                            }>"REMOVE"</button>
+                        </div>
+                    }}).collect_view()}</div>
+                    <button type="button" class="queue-clear" on:click=move |_| { tracks.set(Vec::new()); current.set(0); playing.set(false); }>"Clear queue"</button>
+                </Show>
+            </aside>
+        </Show>
+        <div class="now"><div><b>{move||track().map(|t|t.title).unwrap_or_else(||"Nothing playing".into())}</b><span>{move||track().map(|t|format!("{} · {}",t.artist.unwrap_or_default(),t.source_name)).unwrap_or_default()}</span></div></div>
+        <div class="custom-player">
+            <audio id="resonance-audio" class="player-audio" node_ref=audio_ref
+                on:loadedmetadata=move |event| {
+                    let audio = event_target::<web_sys::HtmlAudioElement>(&event);
+                    duration.set(audio.duration());
+                    audio.set_volume(volume.get_untracked());
+                    audio.set_muted(muted.get_untracked());
+                    let restored = normalized_position(
+                        position.get_untracked(),
+                        audio.duration().is_finite().then(|| audio.duration().floor().max(0.0) as u64),
+                    );
+                    if restored > 0.0 { audio.set_current_time(restored); }
+                    position.set(restored);
+                    persisted_second.set(restored.floor() as u64);
+                    if playing.get_untracked() { let _ = audio.play(); }
+                }
+                on:timeupdate=move |event| {
+                    let seconds = event_target::<web_sys::HtmlAudioElement>(&event).current_time();
+                    position.set(seconds);
+                    let whole_seconds = seconds.floor().max(0.0) as u64;
+                    if whole_seconds / 5 != persisted_second.get_untracked() / 5 {
+                        persisted_second.set(whole_seconds);
+                        persist_playback(
+                            &tracks.get_untracked(), current.get_untracked(), seconds,
+                            volume.get_untracked(), muted.get_untracked(), shuffle.get_untracked(),
+                            repeat.get_untracked(),
+                        );
+                    }
+                }
+                on:durationchange=move |event| duration.set(event_target::<web_sys::HtmlAudioElement>(&event).duration())
+                on:play=move |_| playing.set(true)
+                on:pause=move |event| {
+                    let audio = event_target::<web_sys::HtmlAudioElement>(&event);
+                    if audio.ready_state() == 0 { return; }
+                    let seconds = audio.current_time();
+                    position.set(seconds);
+                    persist_playback(
+                        &tracks.get_untracked(), current.get_untracked(), seconds,
+                        volume.get_untracked(), muted.get_untracked(), shuffle.get_untracked(),
+                        repeat.get_untracked(),
+                    );
+                }
+                on:ended=move |event| {
         if repeat.get_untracked() == RepeatMode::One {
             let audio = event_target::<web_sys::HtmlAudioElement>(&event);
             audio.set_current_time(0.0);
+            position.set(0.0);
             let _ = audio.play();
             playing.set(true);
             return;
@@ -774,37 +1201,123 @@ fn Player(
             playing.set(false);
             return;
         }
-        let index = current.get_untracked();
-        let next = if shuffle.get_untracked() && len > 1 {
-            let offset = (js_sys::Math::random() * (len - 1) as f64).floor() as usize + 1;
-            Some((index + offset) % len)
-        } else if index + 1 < len {
-            Some(index + 1)
-        } else if repeat.get_untracked() == RepeatMode::All {
-            Some(0)
-        } else {
-            None
-        };
+        let next = next_queue_index(len, current.get_untracked(), shuffle.get_untracked(), repeat.get_untracked(), js_sys::Math::random());
         if let Some(next) = next {
             current.set(next);
             playing.set(true);
         } else {
             playing.set(false);
         }
-    }></audio>}})}</div><div class="player-tools"><button type="button" class:active=move || shuffle.get() aria-pressed=move || shuffle.get().to_string() title="Play the queue in random order" on:click=move |_| shuffle.update(|enabled| *enabled = !*enabled)>"SHUFFLE"</button><button type="button" class:active=move || repeat.get() != RepeatMode::Off title="Cycle repeat mode" on:click=move |_| repeat.update(|mode| *mode = match *mode { RepeatMode::Off => RepeatMode::One, RepeatMode::One => RepeatMode::All, RepeatMode::All => RepeatMode::Off })>{move || match repeat.get() { RepeatMode::Off => "REPEAT OFF", RepeatMode::One => "REPEAT ONE", RepeatMode::All => "REPEAT ALL" }}</button><span>{move||if playing.get(){"STREAMING"}else{"READY"}}</span></div></footer>}
+    }></audio>
+            <div class="transport-controls">
+                <button type="button" title="Previous track" aria-label="Previous track" disabled=move || tracks.get().is_empty() on:click=previous>"◀◀"</button>
+                <button type="button" class="play-toggle" title=move || if playing.get() {"Pause"} else {"Play"} aria-label=move || if playing.get() {"Pause"} else {"Play"} disabled=move || tracks.get().is_empty() on:click=move |_| {
+                    if let Some(audio) = audio_ref.get_untracked() {
+                        if playing.get_untracked() {
+                            playing.set(false);
+                            audio.pause().ok();
+                        } else {
+                            playing.set(true);
+                            let _ = audio.play();
+                        }
+                    }
+                }>{move || if playing.get() {"Ⅱ"} else {"▶"}}</button>
+                <button type="button" title="Next track" aria-label="Next track" disabled=move || tracks.get().is_empty() on:click=next>"▶▶"</button>
+            </div>
+            <div class="player-timeline"><span>{move || player_time(position.get())}</span><input type="range" min="0" max=move || duration.get().max(0.0) step="0.1" prop:value=move || position.get() aria-label="Seek" disabled=move || tracks.get().is_empty() on:input=move |event| {
+                if let Ok(seconds) = event_target_value(&event).parse::<f64>() {
+                    if let Some(audio) = audio_ref.get_untracked() { audio.set_current_time(seconds); }
+                    position.set(seconds);
+                }
+            }/><span>{move || player_time(duration.get())}</span></div>
+            <div class="player-modes">
+                <button type="button" class="icon-button" class:active=move || shuffle.get() aria-pressed=move || shuffle.get().to_string() aria-label=move || if shuffle.get() {"Disable shuffle"} else {"Enable shuffle"} title=move || if shuffle.get() {"Disable shuffle"} else {"Enable shuffle"} on:click=move |_| shuffle.update(|enabled| *enabled = !*enabled)>{shuffle_icon()}</button>
+                <button type="button" class="icon-button" class:active=move || repeat.get() != RepeatMode::Off aria-label=move || match repeat.get() { RepeatMode::Off => "Repeat off; activate repeat one", RepeatMode::One => "Repeat one; activate repeat all", RepeatMode::All => "Repeat all; turn repeat off" } title=move || match repeat.get() { RepeatMode::Off => "Repeat off", RepeatMode::One => "Repeat one", RepeatMode::All => "Repeat all" } on:click=move |_| repeat.update(|mode| *mode = match *mode { RepeatMode::Off => RepeatMode::One, RepeatMode::One => RepeatMode::All, RepeatMode::All => RepeatMode::Off })>{move || repeat_icon(repeat.get())}</button>
+                <button type="button" class="icon-button" class:active=move || muted.get() aria-pressed=move || muted.get().to_string() aria-label=move || if muted.get() {"Unmute"} else {"Mute"} title=move || if muted.get() {"Unmute"} else {"Mute"} on:click=move |_| {
+                    muted.update(|value| *value = !*value);
+                    if let Some(audio) = audio_ref.get_untracked() { audio.set_muted(muted.get_untracked()); }
+                }>{move || volume_icon(muted.get())}</button>
+                <input type="range" min="0" max="1" step="0.01" prop:value=move || volume.get() aria-label="Volume" on:input=move |event| {
+                    if let Ok(level) = event_target_value(&event).parse::<f64>() {
+                        volume.set(level);
+                        muted.set(false);
+                        if let Some(audio) = audio_ref.get_untracked() { audio.set_volume(level); audio.set_muted(false); }
+                    }
+                }/>
+                <button type="button" class:active=move || queue_open.get() aria-expanded=move || queue_open.get().to_string() on:click=move |_| queue_open.update(|open| *open = !*open)>{move || format!("QUEUE {}", tracks.get().len())}</button>
+            </div>
+        </div>
+    </footer>}
 }
 
 #[component]
 pub fn App() -> impl IntoView {
+    let QueueSnapshot {
+        tracks: saved_tracks,
+        current: saved_current,
+        position_seconds: saved_position,
+        volume: saved_volume,
+        muted: saved_muted,
+        shuffle: saved_shuffle,
+        repeat: saved_repeat,
+        ..
+    } = load_queue_snapshot();
     let active = RwSignal::new(Page::Home);
     let providers = RwSignal::new(Vec::<Provider>::new());
     let albums = RwSignal::new(Vec::<Album>::new());
-    let tracks = RwSignal::new(Vec::<Track>::new());
-    let current = RwSignal::new(0usize);
+    let tracks = RwSignal::new(saved_tracks);
+    let current = RwSignal::new(saved_current);
     let playing = RwSignal::new(false);
+    let position = RwSignal::new(saved_position);
+    let volume = RwSignal::new(saved_volume);
+    let muted = RwSignal::new(saved_muted);
+    let shuffle = RwSignal::new(saved_shuffle);
+    let repeat = RwSignal::new(saved_repeat);
     let loading = RwSignal::new(false);
     let issues = RwSignal::new(Vec::<ProviderIssue>::new());
     let error = RwSignal::new(None::<String>);
+    let active_track_id = RwSignal::new(
+        tracks
+            .get_untracked()
+            .get(current.get_untracked())
+            .map(|track| track.id.clone()),
+    );
+    Effect::new(move |_| {
+        let items = tracks.get();
+        let selected = current.get().min(items.len().saturating_sub(1));
+        let next_track_id = items.get(selected).map(|track| track.id.clone());
+        if active_track_id.get_untracked() != next_track_id {
+            active_track_id.set(next_track_id);
+            position.set(0.0);
+        }
+        persist_playback(
+            &items,
+            selected,
+            position.get_untracked(),
+            volume.get(),
+            muted.get(),
+            shuffle.get(),
+            repeat.get(),
+        );
+    });
+    if let Some(window) = web_sys::window() {
+        let save_before_unload = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
+            persist_playback(
+                &tracks.get_untracked(),
+                current.get_untracked(),
+                position.get_untracked(),
+                volume.get_untracked(),
+                muted.get_untracked(),
+                shuffle.get_untracked(),
+                repeat.get_untracked(),
+            );
+        });
+        let _ = window.add_event_listener_with_callback(
+            "beforeunload",
+            save_before_unload.as_ref().unchecked_ref(),
+        );
+        save_before_unload.forget();
+    }
     spawn_local(async move {
         match get_json::<Vec<Provider>>("/providers").await {
             Ok(items) => providers.set(items),
@@ -815,19 +1328,70 @@ pub fn App() -> impl IntoView {
         let provider_count = providers.get().len();
         if provider_count == 0 {
             albums.set(Vec::new());
-            tracks.set(Vec::new());
             issues.set(Vec::new());
             return;
         }
-        spawn_local(load_library(
-            albums, tracks, current, loading, issues, error,
-        ));
+        spawn_local(load_library(albums, loading, issues, error));
     });
-    view! {<div class="app"><Nav active providers/><div class="view">{move||match active.get(){Page::Home=>view!{<Home providers albums tracks current playing loading issues error/>}.into_any(),Page::Albums=>view!{<AlbumsPage providers albums tracks current playing loading issues error/>}.into_any(),Page::Artists=>view!{<ArtistsPage providers/>}.into_any(),Page::Playlists=>view!{<PlaylistsPage providers queue=tracks current playing/>}.into_any(),Page::Search=>view!{<SearchPage providers queue=tracks current playing/>}.into_any(),Page::Settings=>view!{<Settings providers/>}.into_any()}}</div><nav class="mobile-nav">{[(Page::Home,"⌂","Home"),(Page::Albums,"▣","Albums"),(Page::Search,"⌕","Search"),(Page::Settings,"⚙","Settings")].into_iter().map(|(p,g,l)|view!{<button class:active=move||active.get()==p on:click=move |_|active.set(p)><span>{g}</span>{l}</button>}).collect_view()}</nav><Player tracks current playing/></div>}
+    view! {<div class="app"><Nav active providers/><div class="view">{move||match active.get(){Page::Home=>view!{<Home providers albums queue=tracks current playing loading issues error/>}.into_any(),Page::Albums=>view!{<AlbumsPage providers albums tracks current playing loading issues error/>}.into_any(),Page::Artists=>view!{<ArtistsPage providers queue=tracks current playing/>}.into_any(),Page::Playlists=>view!{<PlaylistsPage providers queue=tracks current playing/>}.into_any(),Page::Search=>view!{<SearchPage providers queue=tracks current playing/>}.into_any(),Page::Settings=>view!{<Settings providers/>}.into_any()}}</div><nav class="mobile-nav">{[(Page::Home,"⌂","Home"),(Page::Albums,"▣","Albums"),(Page::Search,"⌕","Search"),(Page::Settings,"⚙","Settings")].into_iter().map(|(p,g,l)|view!{<button class:active=move||active.get()==p on:click=move |_|active.set(p)><span>{g}</span>{l}</button>}).collect_view()}</nav><Player tracks current playing position volume muted shuffle repeat/></div>}
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn main() {
     console_error_panic_hook::set_once();
     mount_to_body(App);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        next_queue_index, normalized_position, normalized_volume, QueueSnapshot, RepeatMode,
+    };
+
+    #[test]
+    fn queue_navigation_stops_or_wraps_at_the_boundary() {
+        assert_eq!(next_queue_index(3, 2, false, RepeatMode::Off, 0.5), None);
+        assert_eq!(next_queue_index(3, 2, false, RepeatMode::All, 0.5), Some(0));
+    }
+
+    #[test]
+    fn non_repeating_shuffle_never_wraps_backwards() {
+        assert_eq!(next_queue_index(5, 2, true, RepeatMode::Off, 0.0), Some(3));
+        assert_eq!(next_queue_index(5, 2, true, RepeatMode::Off, 0.99), Some(4));
+        assert_eq!(next_queue_index(5, 4, true, RepeatMode::Off, 0.5), None);
+    }
+
+    #[test]
+    fn legacy_queue_snapshots_receive_safe_playback_defaults() {
+        let snapshot: QueueSnapshot =
+            serde_json::from_str(r#"{"version":1,"tracks":[],"current":0}"#)
+                .expect("v1 queue snapshot should remain readable");
+
+        assert_eq!(snapshot.position_seconds, 0.0);
+        assert_eq!(snapshot.volume, 1.0);
+        assert!(!snapshot.muted);
+        assert!(!snapshot.shuffle);
+        assert_eq!(snapshot.repeat, RepeatMode::Off);
+    }
+
+    #[test]
+    fn invalid_or_completed_positions_restart_safely() {
+        assert_eq!(normalized_position(f64::NAN, Some(180)), 0.0);
+        assert_eq!(normalized_position(-1.0, Some(180)), 0.0);
+        assert_eq!(normalized_position(178.0, Some(180)), 0.0);
+        assert_eq!(normalized_position(63.5, Some(180)), 63.5);
+    }
+
+    #[test]
+    fn invalid_volume_values_are_normalized() {
+        assert_eq!(normalized_volume(f64::NAN), 1.0);
+        assert_eq!(normalized_volume(-0.5), 0.0);
+        assert_eq!(normalized_volume(1.5), 1.0);
+        assert_eq!(normalized_volume(0.45), 0.45);
+    }
+
+    #[test]
+    fn malformed_snapshots_are_rejected() {
+        assert!(serde_json::from_str::<QueueSnapshot>("not json").is_err());
+    }
 }
