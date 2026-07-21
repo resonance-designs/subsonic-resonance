@@ -13,6 +13,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-07-21
+
+### Changed
+
+- Deferred artist-catalog discovery until a `getArtist` response lacks attribution or conflicts with its reported album count, avoiding an extra provider request on valid responses.
+- Removed the application base stylesheet’s no-op empty data-URL import.
+- Extended version synchronization to update the README release badges before regenerating the documentation-site introduction.
+- Corrected the roadmap to distinguish completed persistent queue and provider-qualified media identity work from planned native media controls.
+
+### Fixed
+
+- Replaced undefined media-card, playlist-card, and library-search `--blue` references with the established cyan accent token.
+- Marked aggregated library responses incomplete when a provider task is cancelled or panics, while preserving successful items and provider-specific issues.
+
 ## [0.1.4] - 2026-07-19
 
 ### Added

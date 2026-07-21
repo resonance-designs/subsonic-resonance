@@ -63,6 +63,16 @@ function main() {
   updateJson('docs-site/api/package.json', version);
   replace('docs-site/config/version.yml', /^version:\s*.*$/m, `version: '${version}'`);
   replace('docs-site/api/src/index.ts', /(\bversion:\s*['"])[^'"]+(['"])/, `$1${version}$2`, true);
+  replace(
+    'README.md',
+    /(!\[Static Badge\]\(https:\/\/img\.shields\.io\/badge\/Version-)[^)]+(-orange\))/,
+    `$1${version}$2`,
+  );
+  replace(
+    'README.md',
+    /(!\[Static Badge\]\(https:\/\/img\.shields\.io\/badge\/Latest_Release-v)[^)]+(-green\))/,
+    `$1${version}$2`,
+  );
   replace('README.md', /The project is currently at `[^`]+`/, `The project is currently at \`${version}\``);
   ensureReleaseDoc(version);
   run(process.execPath, ['scripts/sync-docs.js']);

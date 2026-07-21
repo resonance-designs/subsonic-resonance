@@ -504,6 +504,7 @@ where
 
     let mut items = Vec::new();
     let mut issues = Vec::new();
+    let mut task_failed = false;
     while let Some(result) = tasks.join_next().await {
         match result {
             Ok((summary, Ok(Ok(provider_items)))) => items.extend(
@@ -513,13 +514,16 @@ where
             ),
             Ok((summary, Ok(Err(error)))) => issues.push(provider_issue(&summary, error)),
             Ok((summary, Err(_))) => issues.push(timeout_issue(&summary)),
-            Err(error) => tracing::warn!(%error, "{task_error_message}"),
+            Err(error) => {
+                task_failed = true;
+                tracing::warn!(%error, "{task_error_message}");
+            }
         }
     }
     items.sort_by(sort);
     issues.sort_by(|a, b| a.provider_id.cmp(&b.provider_id));
     AggregateResponse {
-        complete: issues.is_empty(),
+        complete: issues.is_empty() && !task_failed,
         items,
         issues,
     }

@@ -1463,7 +1463,7 @@ select {
 }
 
 .media-card small {
-  color: var(--blue);
+  color: var(--resonance-cyan);
   font-size: 9px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -1574,7 +1574,7 @@ select {
 }
 
 .playlist-card small {
-  color: var(--blue);
+  color: var(--resonance-cyan);
   font-size: 9px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1640,7 +1640,7 @@ select {
 }
 
 .library-search > span {
-  color: var(--blue);
+  color: var(--resonance-cyan);
   font-size: 22px;
 }
 

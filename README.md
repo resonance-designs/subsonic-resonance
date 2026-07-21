@@ -1,11 +1,11 @@
 # Subsonic Resonance
 
-![Static Badge](https://img.shields.io/badge/Version-0.1.3-orange)
-![Static Badge](https://img.shields.io/badge/Latest_Release-v0.1.3-green)
+![Static Badge](https://img.shields.io/badge/Version-0.1.5-orange)
+![Static Badge](https://img.shields.io/badge/Latest_Release-v0.1.5-green)
 
 Subsonic Resonance is a Windows-first, cross-platform OpenSubsonic streaming client written in Rust. It uses a shared Leptos/WebAssembly interface for the browser and Tauri desktop shell, with provider integrations behind a provider-neutral Rust API.
 
-The project is currently at `0.1.4` and under active development toward the `0.2.0` library-experience release.
+The project is currently at `0.1.5` and under active development toward the `0.2.0` library-experience release.
 
 ## Current functionality
 
@@ -249,7 +249,7 @@ The release command reads the Cargo workspace version, confirms all Cargo, Node,
 - Allow playlists and the playback queue to mix tracks from multiple Subsonic servers, Bandcamp, and future local-library providers.
 - Preserve each playlist item's source identity and report unavailable sources without discarding the rest of the playlist.
 - Add full album-detail navigation and user-facing pagination while retaining the existing album sorting, filtering, provider attribution, and paged provider discovery.
-- Add native operating-system media controls; queue entries, the selected track, in-track position, and playback preferences now persist across browser reloads.
+- Add native operating-system media controls.
 - Add favorites, scrobbling, play-queue restoration, and server capability detection.
 - Improve loading, empty, offline, authentication-expired, and partial-failure states.
 

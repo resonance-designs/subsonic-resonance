@@ -16,7 +16,7 @@ This file tracks implementation work that is planned but not yet complete. Keep 
 - [x] Replace global active-provider state with an enabled-provider registry and unified-library query service.
 - [x] Query enabled providers concurrently with per-provider timeouts, partial results, and source-specific error reporting.
 - [x] Add optional source filters without hiding or disabling the other configured providers globally.
-- [x] Introduce provider-qualified `MediaId` values for the implemented track, album, artist, playlist, artwork, and route flows; favorites, persistent queues, and caches will adopt them as those features are added.
+- [x] Introduce provider-qualified `MediaId` values for the implemented track, album, artist, playlist, artwork, route, and persistent playback-queue flows; favorites and caches will adopt them as those features are added.
 - [x] Define deterministic merge, sort, and pagination behavior for current album and track results arriving from multiple providers; cross-provider metadata deduplication remains future work.
 - [x] Update Home, Albums, Search, and player state to consume aggregated results while showing each item's source.
 - [x] Update Artists to consume aggregated results after adding the required provider contract and API endpoints.

@@ -253,19 +253,19 @@ impl MusicProvider for SubsonicClient {
                     .into_iter()
                     .map(Into::into)
                     .collect();
-                let listed_artist = self
-                    .artists(u32::MAX, 0)
-                    .await
-                    .ok()
-                    .and_then(|artists| artists.into_iter().find(|artist| artist.id == id));
-                let artist = listed_artist.unwrap_or(response_artist);
                 let has_attribution = albums_have_artist_attribution(&response_albums);
-                let detail = scoped_artist_detail(artist.clone(), response_albums);
-                let count_conflicts = artist
+                let detail = scoped_artist_detail(response_artist.clone(), response_albums);
+                let count_conflicts = response_artist
                     .album_count
                     .is_some_and(|expected| detail.albums.len() != expected as usize);
 
                 if !has_attribution || count_conflicts {
+                    let artist = self
+                        .artists(u32::MAX, 0)
+                        .await
+                        .ok()
+                        .and_then(|artists| artists.into_iter().find(|artist| artist.id == id))
+                        .unwrap_or(response_artist);
                     if let Ok(albums) = self.albums(500, 0).await {
                         return Ok(scoped_artist_detail(artist, albums));
                     }

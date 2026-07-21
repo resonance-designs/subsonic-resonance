@@ -1,6 +1,6 @@
 {
   "name": "subsonic-resonance",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "author": "Richard Bakos @ Resonance Designs (mailto:info@resonancedesigns.dev)",
   "description": "An OpenSubsonic streaming client written in Rust.",
