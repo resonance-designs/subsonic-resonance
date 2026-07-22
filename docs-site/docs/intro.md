@@ -16,9 +16,14 @@ sidebar_position: 1
 - Authenticate with an OpenSubsonic API key or Subsonic salted password token.
 - Fall back to legacy directory-based browsing for servers that omit modern ID3 browsing results.
 - Verify new connections with `ping` before registering them.
+- Discover versioned OpenSubsonic extensions and conservatively gate optional features when capability support is unknown.
+- Aggregate starred artists, albums, and tracks across compatible providers in a dedicated Favorites view.
+- Add or remove provider-qualified favorites from artist details, album details, track lists, and the Favorites view with optimistic rollback on failure.
+- Report provider-qualified now-playing and completed scrobbles without interrupting playback, with a persistent global opt-out in Settings.
 - Query every connected provider concurrently as one unified library.
-- Browse albums from all available providers without selecting a globally active connection.
+- Browse albums from all available providers in a paginated grid without selecting a globally active connection.
 - Retrieve successive provider album pages instead of limiting each collection to its first 30 entries.
+- Open dedicated provider-qualified album pages with release metadata, artwork, and playable track lists.
 - Filter Albums, Artists, Playlists, and Search by provider without disabling or changing any configured connection.
 - Sort the dedicated Albums page by title, artist, year, and source.
 - Browse and filter artists from every connected source, with album-count sorting and provider attribution.

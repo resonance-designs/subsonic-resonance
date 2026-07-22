@@ -18,9 +18,7 @@ sidebar_position: 2
 - Persist and restore interface preferences before first paint to avoid theme flashes.
 - Allow playlists and the playback queue to mix tracks from multiple Subsonic servers, Bandcamp, and future local-library providers.
 - Preserve each playlist item's source identity and report unavailable sources without discarding the rest of the playlist.
-- Add full album-detail navigation and user-facing pagination while retaining the existing album sorting, filtering, provider attribution, and paged provider discovery.
 - Add native operating-system media controls.
-- Add favorites, scrobbling, play-queue restoration, and server capability detection.
 - Improve loading, empty, offline, authentication-expired, and partial-failure states.
 
 ### 0.3 — Secure desktop application

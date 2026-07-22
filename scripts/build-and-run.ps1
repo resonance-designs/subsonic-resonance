@@ -61,8 +61,8 @@ function Confirm-PortAvailable {
 }
 
 function Confirm-BuildArtifactAvailable {
-    $serverExecutable = Join-Path $repositoryRoot 'target\debug\resonance-server.exe'
-    $lockingProcesses = @(Get-Process -Name 'resonance-server' -ErrorAction SilentlyContinue | Where-Object {
+    $serverExecutable = Join-Path $repositoryRoot 'target\debug\subsonic-resonance-server.exe'
+    $lockingProcesses = @(Get-Process -Name 'subsonic-resonance-server' -ErrorAction SilentlyContinue | Where-Object {
         $_.Path -and [System.IO.Path]::GetFullPath($_.Path) -eq [System.IO.Path]::GetFullPath($serverExecutable)
     })
 
@@ -77,7 +77,7 @@ function Confirm-BuildArtifactAvailable {
 if (-not (Confirm-BuildArtifactAvailable)) {
     Exit-UnableToContinue
 }
-if (-not (Confirm-PortAvailable -Port 3000 -Service 'the Resonance API server')) {
+if (-not (Confirm-PortAvailable -Port 3000 -Service 'the Subsonic Resonance API server')) {
     Exit-UnableToContinue
 }
 
@@ -115,21 +115,21 @@ try {
 
     Write-Host
     if ($selection -eq '1') {
-        if (-not (Confirm-PortAvailable -Port 3000 -Service 'the Resonance API server')) {
+        if (-not (Confirm-PortAvailable -Port 3000 -Service 'the Subsonic Resonance API server')) {
             Exit-UnableToContinue
         }
-        if (-not (Confirm-PortAvailable -Port 8088 -Service 'the Resonance browser UI')) {
+        if (-not (Confirm-PortAvailable -Port 8088 -Service 'the Subsonic Resonance browser UI')) {
             Exit-UnableToContinue
         }
         Write-Host 'Starting the API server and browser application. Press Ctrl+C to stop.'
         & npm run app:start
     }
     else {
-        if (-not (Confirm-PortAvailable -Port 3000 -Service 'the Resonance API server')) {
+        if (-not (Confirm-PortAvailable -Port 3000 -Service 'the Subsonic Resonance API server')) {
             Exit-UnableToContinue
         }
         Write-Host 'Starting the API server. Press Ctrl+C to stop.'
-        & cargo run -p resonance-server
+        & cargo run -p subsonic-resonance-server
     }
 
     if ($LASTEXITCODE -ne 0) {

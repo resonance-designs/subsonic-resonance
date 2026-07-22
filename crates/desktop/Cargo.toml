@@ -1,5 +1,5 @@
 [package]
-name = "resonance-desktop"
+name = "subsonic-resonance-desktop"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true

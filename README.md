@@ -13,9 +13,14 @@ The project is currently at `0.1.5` and under active development toward the `0.2
 - Authenticate with an OpenSubsonic API key or Subsonic salted password token.
 - Fall back to legacy directory-based browsing for servers that omit modern ID3 browsing results.
 - Verify new connections with `ping` before registering them.
+- Discover versioned OpenSubsonic extensions and conservatively gate optional features when capability support is unknown.
+- Aggregate starred artists, albums, and tracks across compatible providers in a dedicated Favorites view.
+- Add or remove provider-qualified favorites from artist details, album details, track lists, and the Favorites view with optimistic rollback on failure.
+- Report provider-qualified now-playing and completed scrobbles without interrupting playback, with a persistent global opt-out in Settings.
 - Query every connected provider concurrently as one unified library.
-- Browse albums from all available providers without selecting a globally active connection.
+- Browse albums from all available providers in a paginated grid without selecting a globally active connection.
 - Retrieve successive provider album pages instead of limiting each collection to its first 30 entries.
+- Open dedicated provider-qualified album pages with release metadata, artwork, and playable track lists.
 - Filter Albums, Artists, Playlists, and Search by provider without disabling or changing any configured connection.
 - Sort the dedicated Albums page by title, artist, year, and source.
 - Browse and filter artists from every connected source, with album-count sorting and provider attribution.
@@ -36,13 +41,13 @@ Home, Albums, Artists, Playlists, and Search now use the unified library service
 
 ## Architecture
 
-| Crate                         | Responsibility                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------------- |
-| `resonance-core`              | Provider-neutral domain models and the `MusicProvider` contract.                |
-| `resonance-provider-subsonic` | OpenSubsonic authentication, browsing, search, artwork, and stream URL support. |
-| `resonance-server`            | Axum provider registry, browser API, and credential-aware media proxy.          |
-| `subsonic-resonance-ui`       | Shared Leptos CSR interface compiled to WebAssembly.                            |
-| `resonance-desktop`           | Tauri 2 Windows/desktop shell.                                                  |
+| Crate                                  | Responsibility                                                                  |
+| -------------------------------------- | ------------------------------------------------------------------------------- |
+| `subsonic-resonance-core`              | Provider-neutral domain models and the `MusicProvider` contract.                |
+| `subsonic-resonance-provider-subsonic` | OpenSubsonic authentication, browsing, search, artwork, and stream URL support. |
+| `subsonic-resonance-server`            | Axum provider registry, browser API, and credential-aware media proxy.          |
+| `subsonic-resonance-ui`                | Shared Leptos CSR interface compiled to WebAssembly.                            |
+| `subsonic-resonance-desktop`           | Tauri 2 Windows/desktop shell.                                                  |
 
 ```text
       Browser / Tauri UI
@@ -77,7 +82,7 @@ cargo install trunk --locked
 Start the Rust backend from the repository root:
 
 ```powershell
-cargo run -p resonance-server
+cargo run -p subsonic-resonance-server
 ```
 
 The backend listens on `http://127.0.0.1:3000` by default. Environment credentials are optional because providers can be added from the UI.
@@ -100,7 +105,7 @@ The backend can register one provider at startup from environment variables. Pre
 ```powershell
 $env:RESONANCE_SERVER_URL='https://music.example.com/'
 $env:RESONANCE_API_KEY='your-api-key'
-cargo run -p resonance-server
+cargo run -p subsonic-resonance-server
 ```
 
 For salted password-token authentication:
@@ -109,7 +114,7 @@ For salted password-token authentication:
 $env:RESONANCE_SERVER_URL='https://music.example.com/'
 $env:RESONANCE_USERNAME='listener'
 $env:RESONANCE_PASSWORD='your-password'
-cargo run -p resonance-server
+cargo run -p subsonic-resonance-server
 ```
 
 ### Environment variables
@@ -180,7 +185,7 @@ On Linux and macOS, use the equivalent Bash launcher:
 npm run build:interactive:unix
 ```
 
-The Bash script can also be invoked directly with `bash scripts/build-and-run.sh`. Both launchers remain attached after startup so `Ctrl+C` can reliably stop the processes and release their ports. Before compiling or starting a service, the launchers check required ports; Windows also detects a running `resonance-server.exe` that would lock the Cargo build artifact. When conflicts are found, the launcher identifies the processes and asks for permission before stopping them. Declining exits without building or starting Resonance.
+The Bash script can also be invoked directly with `bash scripts/build-and-run.sh`. Both launchers remain attached after startup so `Ctrl+C` can reliably stop the processes and release their ports. Before compiling or starting a service, the launchers check required ports; Windows also detects a running `subsonic-resonance-server.exe` that would lock the Cargo build artifact. When conflicts are found, the launcher identifies the processes and asks for permission before stopping them. Declining exits without building or starting Resonance.
 
 ## Documentation site
 
@@ -248,9 +253,7 @@ The release command reads the Cargo workspace version, confirms all Cargo, Node,
 - Persist and restore interface preferences before first paint to avoid theme flashes.
 - Allow playlists and the playback queue to mix tracks from multiple Subsonic servers, Bandcamp, and future local-library providers.
 - Preserve each playlist item's source identity and report unavailable sources without discarding the rest of the playlist.
-- Add full album-detail navigation and user-facing pagination while retaining the existing album sorting, filtering, provider attribution, and paged provider discovery.
 - Add native operating-system media controls.
-- Add favorites, scrobbling, play-queue restoration, and server capability detection.
 - Improve loading, empty, offline, authentication-expired, and partial-failure states.
 
 ### 0.3 — Secure desktop application

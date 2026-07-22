@@ -27,7 +27,7 @@ cargo install trunk --locked
 Start the Rust backend from the repository root:
 
 ```powershell
-cargo run -p resonance-server
+cargo run -p subsonic-resonance-server
 ```
 
 The backend listens on `http://127.0.0.1:3000` by default. Environment credentials are optional because providers can be added from the UI.
@@ -50,7 +50,7 @@ The backend can register one provider at startup from environment variables. Pre
 ```powershell
 $env:RESONANCE_SERVER_URL='https://music.example.com/'
 $env:RESONANCE_API_KEY='your-api-key'
-cargo run -p resonance-server
+cargo run -p subsonic-resonance-server
 ```
 
 For salted password-token authentication:
@@ -59,7 +59,7 @@ For salted password-token authentication:
 $env:RESONANCE_SERVER_URL='https://music.example.com/'
 $env:RESONANCE_USERNAME='listener'
 $env:RESONANCE_PASSWORD='your-password'
-cargo run -p resonance-server
+cargo run -p subsonic-resonance-server
 ```
 
 ### Environment variables
@@ -120,4 +120,4 @@ On Linux and macOS, use the equivalent Bash launcher:
 npm run build:interactive:unix
 ```
 
-The Bash script can also be invoked directly with `bash scripts/build-and-run.sh`. Both launchers remain attached after startup so `Ctrl+C` can reliably stop the processes and release their ports. Before compiling or starting a service, the launchers check required ports; Windows also detects a running `resonance-server.exe` that would lock the Cargo build artifact. When conflicts are found, the launcher identifies the processes and asks for permission before stopping them. Declining exits without building or starting Resonance.
+The Bash script can also be invoked directly with `bash scripts/build-and-run.sh`. Both launchers remain attached after startup so `Ctrl+C` can reliably stop the processes and release their ports. Before compiling or starting a service, the launchers check required ports; Windows also detects a running `subsonic-resonance-server.exe` that would lock the Cargo build artifact. When conflicts are found, the launcher identifies the processes and asks for permission before stopping them. Declining exits without building or starting Resonance.

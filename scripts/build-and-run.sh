@@ -39,7 +39,7 @@ confirm_port_available() {
     fi
 }
 
-confirm_port_available 3000 'the Resonance API server'
+confirm_port_available 3000 'the Subsonic Resonance API server'
 
 printf 'Building Subsonic Resonance application in '
 for count in 3 2 1; do
@@ -72,12 +72,12 @@ done
 
 printf '\n'
 if [[ "$selection" == '1' ]]; then
-    confirm_port_available 3000 'the Resonance API server'
-    confirm_port_available 8088 'the Resonance browser UI'
+    confirm_port_available 3000 'the Subsonic Resonance API server'
+    confirm_port_available 8088 'the Subsonic Resonance browser UI'
     printf 'Starting the API server and browser application. Press Ctrl+C to stop.\n'
     exec npm run app:start
 else
-    confirm_port_available 3000 'the Resonance API server'
+    confirm_port_available 3000 'the Subsonic Resonance API server'
     printf 'Starting the API server. Press Ctrl+C to stop.\n'
-    exec cargo run -p resonance-server
+    exec cargo run -p subsonic-resonance-server
 fi
