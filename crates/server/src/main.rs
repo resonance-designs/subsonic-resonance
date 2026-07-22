@@ -6,16 +6,17 @@ use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
-    routing::{delete, get},
+    routing::{delete, get, post, put},
 };
-use resonance_core::{
-    AggregateResponse, Album, AlbumDetail, Artist, ArtistDetail, LibraryAlbum, LibraryAlbumDetail,
-    LibraryArtist, LibraryArtistDetail, LibraryPlaylist, LibraryPlaylistDetail, LibraryTrack,
-    MediaId, MediaKind, MusicProvider, Playlist, PlaylistDetail, ProviderError, ProviderId,
-    ProviderIssue, ProviderIssueKind, Track,
-};
-use resonance_provider_subsonic::{Credentials, SubsonicClient};
 use serde::{Deserialize, Serialize};
+use subsonic_resonance_core::{
+    AggregateResponse, Album, AlbumDetail, Artist, ArtistDetail, Favorites as ProviderFavorites,
+    LibraryAlbum, LibraryAlbumDetail, LibraryArtist, LibraryArtistDetail, LibraryPlaylist,
+    LibraryPlaylistDetail, LibraryTrack, MediaId, MediaKind, MusicProvider, Playlist,
+    PlaylistDetail, ProviderCapability, ProviderError, ProviderId, ProviderIssue,
+    ProviderIssueKind, Track,
+};
+use subsonic_resonance_provider_subsonic::{Credentials, SubsonicClient};
 use tokio::sync::RwLock;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
@@ -41,7 +42,12 @@ struct ProviderSummary {
     auth: String,
     server_type: String,
     server_version: String,
+    api_version: String,
     open_subsonic: bool,
+    favorites_supported: bool,
+    scrobbling_supported: bool,
+    capabilities_known: bool,
+    capabilities: Vec<ProviderCapability>,
 }
 
 #[derive(Deserialize)]
@@ -66,7 +72,7 @@ async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "resonance_server=info,tower_http=info".into()),
+                .unwrap_or_else(|_| "subsonic_resonance_server=info,tower_http=info".into()),
         )
         .init();
 
@@ -118,6 +124,15 @@ async fn main() {
             get(library_album),
         )
         .route("/api/library/search", get(library_search))
+        .route("/api/library/favorites", get(library_favorites))
+        .route(
+            "/api/library/favorites/{provider_id}/{kind}/{item_id}",
+            put(add_favorite).delete(remove_favorite),
+        )
+        .route(
+            "/api/library/scrobble/{provider_id}/{track_id}",
+            post(scrobble),
+        )
         .route(
             "/api/providers/{provider_id}/tracks/{track_id}/stream",
             get(stream),
@@ -133,7 +148,7 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .expect("failed to bind server");
-    tracing::info!(%address, "Resonance API listening");
+    tracing::info!(%address, "Subsonic Resonance API listening");
     axum::serve(listener, app).await.expect("server failed");
 }
 
@@ -194,7 +209,12 @@ async fn build_entry(
             auth,
             server_type: status.provider,
             server_version: status.server_version,
+            api_version: status.api_version,
             open_subsonic: status.open_subsonic,
+            favorites_supported: status.favorites_supported,
+            scrobbling_supported: status.scrobbling_supported,
+            capabilities_known: status.capabilities_known,
+            capabilities: status.capabilities,
         },
         client: Arc::new(client),
     })
@@ -377,6 +397,16 @@ async fn search(
 
 const PROVIDER_QUERY_TIMEOUT: Duration = Duration::from_secs(20);
 
+#[derive(Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LibraryFavorites {
+    artists: Vec<LibraryArtist>,
+    albums: Vec<LibraryAlbum>,
+    tracks: Vec<LibraryTrack>,
+    issues: Vec<ProviderIssue>,
+    complete: bool,
+}
+
 fn qualified_id(provider_id: &str, kind: MediaKind, item_id: String) -> MediaId {
     MediaId::new(ProviderId::new(provider_id), kind, item_id)
 }
@@ -504,6 +534,7 @@ where
 
     let mut items = Vec::new();
     let mut issues = Vec::new();
+    let mut task_failed = false;
     while let Some(result) = tasks.join_next().await {
         match result {
             Ok((summary, Ok(Ok(provider_items)))) => items.extend(
@@ -513,13 +544,16 @@ where
             ),
             Ok((summary, Ok(Err(error)))) => issues.push(provider_issue(&summary, error)),
             Ok((summary, Err(_))) => issues.push(timeout_issue(&summary)),
-            Err(error) => tracing::warn!(%error, "{task_error_message}"),
+            Err(error) => {
+                task_failed = true;
+                tracing::warn!(%error, "{task_error_message}");
+            }
         }
     }
     items.sort_by(sort);
     issues.sort_by(|a, b| a.provider_id.cmp(&b.provider_id));
     AggregateResponse {
-        complete: issues.is_empty(),
+        complete: issues.is_empty() && !task_failed,
         items,
         issues,
     }
@@ -687,6 +721,147 @@ async fn library_album(
             .map(|track| qualify_track(&entry.summary, track))
             .collect(),
     }))
+}
+
+async fn library_favorites(State(state): State<AppState>) -> Json<LibraryFavorites> {
+    let mut tasks = tokio::task::JoinSet::new();
+    for entry in provider_entries(&state)
+        .await
+        .into_iter()
+        .filter(|entry| entry.summary.favorites_supported)
+    {
+        tasks.spawn(async move {
+            let result =
+                tokio::time::timeout(PROVIDER_QUERY_TIMEOUT, entry.client.favorites()).await;
+            (entry.summary, result)
+        });
+    }
+    let mut response = LibraryFavorites {
+        complete: true,
+        ..Default::default()
+    };
+    while let Some(result) = tasks.join_next().await {
+        match result {
+            Ok((
+                summary,
+                Ok(Ok(ProviderFavorites {
+                    artists,
+                    albums,
+                    tracks,
+                })),
+            )) => {
+                response.artists.extend(
+                    artists
+                        .into_iter()
+                        .map(|item| qualify_artist(&summary, item)),
+                );
+                response
+                    .albums
+                    .extend(albums.into_iter().map(|item| qualify_album(&summary, item)));
+                response
+                    .tracks
+                    .extend(tracks.into_iter().map(|item| qualify_track(&summary, item)));
+            }
+            Ok((summary, Ok(Err(error)))) => response.issues.push(provider_issue(&summary, error)),
+            Ok((summary, Err(_))) => response.issues.push(timeout_issue(&summary)),
+            Err(error) => {
+                response.complete = false;
+                tracing::warn!(%error, "library favorites task failed");
+            }
+        }
+    }
+    response
+        .artists
+        .sort_by_key(|item| (item.name.to_lowercase(), item.id.clone()));
+    response
+        .albums
+        .sort_by_key(|item| (item.name.to_lowercase(), item.id.clone()));
+    response
+        .tracks
+        .sort_by_key(|item| (item.title.to_lowercase(), item.id.clone()));
+    response
+        .issues
+        .sort_by(|a, b| a.provider_id.cmp(&b.provider_id));
+    response.complete &= response.issues.is_empty();
+    Json(response)
+}
+
+fn favorite_kind(value: &str) -> Result<MediaKind, ApiError> {
+    match value {
+        "artist" => Ok(MediaKind::Artist),
+        "album" => Ok(MediaKind::Album),
+        "track" => Ok(MediaKind::Track),
+        _ => Err(ApiError::bad_request(
+            "favorites support artists, albums, and tracks",
+        )),
+    }
+}
+
+async fn update_favorite(
+    state: AppState,
+    provider_id: String,
+    kind: String,
+    item_id: String,
+    favorite: bool,
+) -> Result<StatusCode, ApiError> {
+    let entry = state
+        .providers
+        .read()
+        .await
+        .get(&provider_id)
+        .cloned()
+        .ok_or_else(|| ApiError(ProviderError::NotFound))?;
+    if !entry.summary.favorites_supported {
+        return Err(ApiError(ProviderError::Unsupported("favorites".into())));
+    }
+    entry
+        .client
+        .set_favorite(favorite_kind(&kind)?, &item_id, favorite)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn add_favorite(
+    State(state): State<AppState>,
+    Path((provider_id, kind, item_id)): Path<(String, String, String)>,
+) -> Result<StatusCode, ApiError> {
+    update_favorite(state, provider_id, kind, item_id, true).await
+}
+
+async fn remove_favorite(
+    State(state): State<AppState>,
+    Path((provider_id, kind, item_id)): Path<(String, String, String)>,
+) -> Result<StatusCode, ApiError> {
+    update_favorite(state, provider_id, kind, item_id, false).await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ScrobbleRequest {
+    submission: bool,
+    time_ms: Option<u64>,
+}
+
+async fn scrobble(
+    State(state): State<AppState>,
+    Path((provider_id, track_id)): Path<(String, String)>,
+    Json(request): Json<ScrobbleRequest>,
+) -> Result<StatusCode, ApiError> {
+    let entry = state
+        .providers
+        .read()
+        .await
+        .get(&provider_id)
+        .cloned()
+        .ok_or_else(|| ApiError(ProviderError::NotFound))?;
+    if !entry.summary.scrobbling_supported {
+        return Err(ApiError(ProviderError::Unsupported("scrobbling".into())));
+    }
+    entry
+        .client
+        .scrobble(&track_id, request.submission, request.time_ms)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn library_search(

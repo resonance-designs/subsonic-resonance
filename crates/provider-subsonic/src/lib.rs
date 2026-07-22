@@ -4,20 +4,31 @@ use async_trait::async_trait;
 use md5::{Digest, Md5};
 use rand::{Rng, distr::Alphanumeric};
 use reqwest::Client;
-use resonance_core::{
-    Album, AlbumDetail, Artist, ArtistDetail, MusicProvider, Playlist, PlaylistDetail,
-    ProviderError, ProviderStatus, Track,
-};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
     time::Duration,
 };
+use subsonic_resonance_core::{
+    Album, AlbumDetail, Artist, ArtistDetail, Favorites, MediaKind, MusicProvider, Playlist,
+    PlaylistDetail, ProviderCapability, ProviderError, ProviderStatus, Track,
+};
 use url::Url;
 
 const API_VERSION: &str = "1.16.1";
 const CLIENT_NAME: &str = "subsonic-resonance";
+
+fn api_version_at_least(actual: &str, required: (u32, u32, u32)) -> bool {
+    let mut parts = actual
+        .split('.')
+        .map(|part| part.parse::<u32>().unwrap_or(0));
+    (
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+    ) >= required
+}
 
 #[derive(Clone, Debug)]
 pub enum Credentials {
@@ -146,10 +157,27 @@ impl SubsonicClient {
         })?;
         Ok(ApiResult {
             body,
-            version: metadata.version,
+            api_version: metadata.version,
             server_type: metadata.server_type,
+            server_version: metadata.server_version,
             open_subsonic: metadata.open_subsonic,
         })
+    }
+
+    async fn discover_capabilities(&self) -> (bool, Vec<ProviderCapability>) {
+        let Ok(response) = self
+            .get::<OpenSubsonicExtensionsBody>("getOpenSubsonicExtensions", &[])
+            .await
+        else {
+            return (false, Vec::new());
+        };
+        let mut capabilities = response.body.capabilities;
+        for capability in &mut capabilities {
+            capability.versions.sort_unstable();
+            capability.versions.dedup();
+        }
+        capabilities.sort_by_key(|capability| capability.name.to_lowercase());
+        (true, capabilities)
     }
 
     fn missing_result(error: &ProviderError) -> bool {
@@ -188,10 +216,25 @@ impl SubsonicClient {
 impl MusicProvider for SubsonicClient {
     async fn ping(&self) -> Result<ProviderStatus, ProviderError> {
         let response: ApiResult<PingBody> = self.get("ping", &[]).await?;
+        let open_subsonic = response.open_subsonic.unwrap_or(false);
+        let favorites_supported = api_version_at_least(&response.api_version, (1, 8, 0));
+        let scrobbling_supported = api_version_at_least(&response.api_version, (1, 5, 0));
+        let (capabilities_known, capabilities) = if open_subsonic {
+            self.discover_capabilities().await
+        } else {
+            (false, Vec::new())
+        };
         Ok(ProviderStatus {
-            server_version: response.version,
+            server_version: response
+                .server_version
+                .unwrap_or_else(|| response.api_version.clone()),
+            api_version: response.api_version,
             provider: response.server_type.unwrap_or_else(|| "Subsonic".into()),
-            open_subsonic: response.open_subsonic.unwrap_or(false),
+            open_subsonic,
+            favorites_supported,
+            scrobbling_supported,
+            capabilities_known,
+            capabilities,
         })
     }
 
@@ -253,19 +296,19 @@ impl MusicProvider for SubsonicClient {
                     .into_iter()
                     .map(Into::into)
                     .collect();
-                let listed_artist = self
-                    .artists(u32::MAX, 0)
-                    .await
-                    .ok()
-                    .and_then(|artists| artists.into_iter().find(|artist| artist.id == id));
-                let artist = listed_artist.unwrap_or(response_artist);
                 let has_attribution = albums_have_artist_attribution(&response_albums);
-                let detail = scoped_artist_detail(artist.clone(), response_albums);
-                let count_conflicts = artist
+                let detail = scoped_artist_detail(response_artist.clone(), response_albums);
+                let count_conflicts = response_artist
                     .album_count
                     .is_some_and(|expected| detail.albums.len() != expected as usize);
 
                 if !has_attribution || count_conflicts {
+                    let artist = self
+                        .artists(u32::MAX, 0)
+                        .await
+                        .ok()
+                        .and_then(|artists| artists.into_iter().find(|artist| artist.id == id))
+                        .unwrap_or(response_artist);
                     if let Ok(albums) = self.albums(500, 0).await {
                         return Ok(scoped_artist_detail(artist, albums));
                     }
@@ -418,6 +461,72 @@ impl MusicProvider for SubsonicClient {
             .collect())
     }
 
+    async fn favorites(&self) -> Result<Favorites, ProviderError> {
+        let response: ApiResult<StarredBody> = self.get("getStarred2", &[]).await?;
+        Ok(Favorites {
+            artists: response
+                .body
+                .starred
+                .artists
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            albums: response
+                .body
+                .starred
+                .albums
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            tracks: response
+                .body
+                .starred
+                .tracks
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        })
+    }
+
+    async fn set_favorite(
+        &self,
+        kind: MediaKind,
+        id: &str,
+        favorite: bool,
+    ) -> Result<(), ProviderError> {
+        let parameter = match kind {
+            MediaKind::Track => "id",
+            MediaKind::Album => "albumId",
+            MediaKind::Artist => "artistId",
+            _ => {
+                return Err(ProviderError::Unsupported(
+                    "favoriting this media type".into(),
+                ));
+            }
+        };
+        let method = if favorite { "star" } else { "unstar" };
+        self.get::<PingBody>(method, &[(parameter, id.to_string())])
+            .await?;
+        Ok(())
+    }
+
+    async fn scrobble(
+        &self,
+        track_id: &str,
+        submission: bool,
+        time_ms: Option<u64>,
+    ) -> Result<(), ProviderError> {
+        let mut arguments = vec![
+            ("id", track_id.to_string()),
+            ("submission", submission.to_string()),
+        ];
+        if let Some(time_ms) = time_ms {
+            arguments.push(("time", time_ms.to_string()));
+        }
+        self.get::<PingBody>("scrobble", &arguments).await?;
+        Ok(())
+    }
+
     fn stream_url(&self, track_id: &str) -> Result<String, ProviderError> {
         Ok(self.endpoint("stream", &[("id", track_id.into())])?.into())
     }
@@ -436,14 +545,17 @@ struct ResponseMetadata {
     version: String,
     #[serde(rename = "type")]
     server_type: Option<String>,
+    #[serde(rename = "serverVersion")]
+    server_version: Option<String>,
     #[serde(rename = "openSubsonic")]
     open_subsonic: Option<bool>,
     error: Option<ApiError>,
 }
 struct ApiResult<T> {
     body: T,
-    version: String,
+    api_version: String,
     server_type: Option<String>,
+    server_version: Option<String>,
     open_subsonic: Option<bool>,
 }
 #[derive(Deserialize)]
@@ -454,6 +566,12 @@ struct ApiError {
 
 #[derive(Deserialize)]
 struct PingBody {}
+
+#[derive(Deserialize)]
+struct OpenSubsonicExtensionsBody {
+    #[serde(rename = "openSubsonicExtensions")]
+    capabilities: Vec<ProviderCapability>,
+}
 
 #[derive(Deserialize)]
 struct ArtistsBody {
@@ -583,6 +701,20 @@ struct SearchBody {
 struct SearchResult {
     #[serde(default)]
     song: Vec<SubsonicTrack>,
+}
+#[derive(Deserialize)]
+struct StarredBody {
+    #[serde(rename = "starred2")]
+    starred: StarredCollection,
+}
+#[derive(Deserialize)]
+struct StarredCollection {
+    #[serde(default, rename = "artist")]
+    artists: Vec<SubsonicArtist>,
+    #[serde(default, rename = "album")]
+    albums: Vec<SubsonicAlbum>,
+    #[serde(default, rename = "song")]
+    tracks: Vec<SubsonicTrack>,
 }
 #[derive(Deserialize)]
 struct MusicDirectoryBody {
@@ -786,6 +918,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn media_annotation_support_respects_the_subsonic_api_version() {
+        assert!(!api_version_at_least("1.4.9", (1, 5, 0)));
+        assert!(api_version_at_least("1.5.0", (1, 5, 0)));
+        assert!(!api_version_at_least("1.7.0", (1, 8, 0)));
+        assert!(api_version_at_least("1.8.0", (1, 8, 0)));
+        assert!(api_version_at_least("1.16.1", (1, 8, 0)));
+        assert!(!api_version_at_least("invalid", (1, 8, 0)));
+    }
+
+    #[test]
     fn api_key_auth_does_not_add_a_username() {
         let client = SubsonicClient::new(
             "https://music.example.test",
@@ -873,6 +1015,27 @@ mod tests {
         assert_eq!(playlist.playlist.song_count, Some(1));
         assert_eq!(playlist.playlist.cover_art.as_deref(), Some("88"));
         assert_eq!(playlist.playlist.entry[0].id, "9");
+
+        let extensions: OpenSubsonicExtensionsBody = serde_json::from_str(
+            r#"{"openSubsonicExtensions":[{"name":"playbackReport","versions":[2,1,1]}]}"#,
+        )
+        .unwrap();
+        assert_eq!(extensions.capabilities[0].name, "playbackReport");
+        assert_eq!(extensions.capabilities[0].versions, vec![2, 1, 1]);
+        assert!(serde_json::from_str::<OpenSubsonicExtensionsBody>("{}").is_err());
+
+        let legacy_metadata: ResponseMetadata =
+            serde_json::from_str(r#"{"status":"ok","version":"1.16.1"}"#).unwrap();
+        assert_eq!(legacy_metadata.open_subsonic, None);
+        assert_eq!(legacy_metadata.server_version, None);
+
+        let starred: StarredBody = serde_json::from_str(
+            r#"{"starred2":{"artist":[{"id":"artist-1","name":"Artist"}],"album":[{"id":"album-1","name":"Album"}],"song":[{"id":"track-1","title":"Track"}]}}"#,
+        )
+        .unwrap();
+        assert_eq!(starred.starred.artists.len(), 1);
+        assert_eq!(starred.starred.albums.len(), 1);
+        assert_eq!(starred.starred.tracks.len(), 1);
     }
 
     #[test]

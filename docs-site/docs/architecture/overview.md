@@ -7,13 +7,13 @@ sidebar_position: 1
 
 # Architecture
 
-| Crate                         | Responsibility                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------------- |
-| `resonance-core`              | Provider-neutral domain models and the `MusicProvider` contract.                |
-| `resonance-provider-subsonic` | OpenSubsonic authentication, browsing, search, artwork, and stream URL support. |
-| `resonance-server`            | Axum provider registry, browser API, and credential-aware media proxy.          |
-| `subsonic-resonance-ui`       | Shared Leptos CSR interface compiled to WebAssembly.                            |
-| `resonance-desktop`           | Tauri 2 Windows/desktop shell.                                                  |
+| Crate                                  | Responsibility                                                                  |
+| -------------------------------------- | ------------------------------------------------------------------------------- |
+| `subsonic-resonance-core`              | Provider-neutral domain models and the `MusicProvider` contract.                |
+| `subsonic-resonance-provider-subsonic` | OpenSubsonic authentication, browsing, search, artwork, and stream URL support. |
+| `subsonic-resonance-server`            | Axum provider registry, browser API, and credential-aware media proxy.          |
+| `subsonic-resonance-ui`                | Shared Leptos CSR interface compiled to WebAssembly.                            |
+| `subsonic-resonance-desktop`           | Tauri 2 Windows/desktop shell.                                                  |
 
 ```text
       Browser / Tauri UI

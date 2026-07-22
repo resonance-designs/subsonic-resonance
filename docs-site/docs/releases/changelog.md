@@ -13,6 +13,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-07-21
+
+### Added
+
+- Added dedicated album-detail navigation with artwork, release metadata, provider attribution, and track browsing through the persistent player.
+- Added 24-album user-facing pagination over the filtered and sorted unified library, backed by complete 500-item batch discovery across all available album pages.
+- Added OpenSubsonic extension discovery with version-aware capability checks, conservative legacy and discovery-failure defaults, and capability details in Settings → Connections.
+- Added a unified Favorites view for provider-qualified artists, albums, and tracks with partial-provider failure reporting.
+- Added version-gated Subsonic `star`, `unstar`, and `getStarred2` support with optimistic UI controls and rollback on failed mutations.
+- Added version-gated Subsonic scrobbling with one-shot now-playing reports, completed submissions after half a track or four minutes, seek-resistant listened-time accounting, and duplicate protection across pause, navigation, queue restoration, and repeat playback.
+- Added a persistent global scrobbling preference under Settings → General and provider-level favorites/scrobbling availability in Connections.
+
+### Changed
+
+- Deferred artist-catalog discovery until a `getArtist` response lacks attribution or conflicts with its reported album count, avoiding an extra provider request on valid responses.
+- Removed the application base stylesheet’s no-op empty data-URL import.
+- Extended version synchronization to update the README release badges before regenerating the documentation-site introduction.
+- Corrected the roadmap to distinguish completed persistent queue and provider-qualified media identity work from planned native media controls.
+- Distinguished each provider’s server version from its supported Subsonic API version in provider summaries.
+- Renamed every Rust package, dependency, import, executable reference, and launcher command to the full `subsonic-resonance-*` project namespace.
+- Moved generated-document drift detection ahead of expensive release checks and made release failures identify the changed files and required remediation.
+
+### Fixed
+
+- Replaced undefined media-card, playlist-card, and library-search `--blue` references with the established cyan accent token.
+- Marked aggregated library responses incomplete when a provider task is cancelled or panics, while preserving successful items and provider-specific issues.
+
 ## [0.1.4] - 2026-07-19
 
 ### Added

@@ -1,5 +1,5 @@
 [package]
-name = "resonance-provider-subsonic"
+name = "subsonic-resonance-provider-subsonic"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -10,7 +10,7 @@ hex.workspace = true
 md-5.workspace = true
 rand.workspace = true
 reqwest.workspace = true
-resonance-core = { path = "../core" }
+subsonic-resonance-core = { path = "../core" }
 serde.workspace = true
 serde_json.workspace = true
 url.workspace = true

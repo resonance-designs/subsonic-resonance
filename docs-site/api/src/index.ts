@@ -42,7 +42,7 @@ async function buildServer() {
     openapi: {
       info: {
         title: 'Docusaurus Template Data API',
-        version: '0.1.4'
+        version: '0.1.5'
       }
     }
   });

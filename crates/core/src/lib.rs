@@ -223,10 +223,38 @@ pub struct AggregateResponse<T> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProviderCapability {
+    pub name: String,
+    pub versions: Vec<u32>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Favorites {
+    pub artists: Vec<Artist>,
+    pub albums: Vec<Album>,
+    pub tracks: Vec<Track>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProviderStatus {
     pub server_version: String,
+    pub api_version: String,
     pub provider: String,
     pub open_subsonic: bool,
+    pub favorites_supported: bool,
+    pub scrobbling_supported: bool,
+    pub capabilities_known: bool,
+    pub capabilities: Vec<ProviderCapability>,
+}
+
+impl ProviderStatus {
+    pub fn supports(&self, name: &str, version: u32) -> bool {
+        self.capabilities.iter().any(|capability| {
+            capability.name.eq_ignore_ascii_case(name) && capability.versions.contains(&version)
+        })
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -255,6 +283,19 @@ pub trait MusicProvider: Send + Sync {
     async fn playlists(&self) -> Result<Vec<Playlist>, ProviderError>;
     async fn playlist(&self, id: &str) -> Result<PlaylistDetail, ProviderError>;
     async fn search(&self, query: &str, limit: u32) -> Result<Vec<Track>, ProviderError>;
+    async fn favorites(&self) -> Result<Favorites, ProviderError>;
+    async fn set_favorite(
+        &self,
+        kind: MediaKind,
+        id: &str,
+        favorite: bool,
+    ) -> Result<(), ProviderError>;
+    async fn scrobble(
+        &self,
+        track_id: &str,
+        submission: bool,
+        time_ms: Option<u64>,
+    ) -> Result<(), ProviderError>;
     fn stream_url(&self, track_id: &str) -> Result<String, ProviderError>;
     fn cover_art_url(&self, cover_art_id: &str, size: Option<u32>)
     -> Result<String, ProviderError>;
@@ -263,6 +304,27 @@ pub trait MusicProvider: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn provider_capabilities_are_version_gated() {
+        let status = ProviderStatus {
+            server_version: "1.2.3".into(),
+            api_version: "1.16.1".into(),
+            provider: "Example".into(),
+            open_subsonic: true,
+            favorites_supported: true,
+            scrobbling_supported: true,
+            capabilities_known: true,
+            capabilities: vec![ProviderCapability {
+                name: "playbackReport".into(),
+                versions: vec![1, 2],
+            }],
+        };
+
+        assert!(status.supports("PlaybackReport", 2));
+        assert!(!status.supports("playbackReport", 3));
+        assert!(!status.supports("unknown", 1));
+    }
 
     #[test]
     fn media_ids_are_qualified_by_provider_and_kind() {

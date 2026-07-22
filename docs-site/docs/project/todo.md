@@ -16,7 +16,7 @@ This file tracks implementation work that is planned but not yet complete. Keep 
 - [x] Replace global active-provider state with an enabled-provider registry and unified-library query service.
 - [x] Query enabled providers concurrently with per-provider timeouts, partial results, and source-specific error reporting.
 - [x] Add optional source filters without hiding or disabling the other configured providers globally.
-- [x] Introduce provider-qualified `MediaId` values for the implemented track, album, artist, playlist, artwork, and route flows; favorites, persistent queues, and caches will adopt them as those features are added.
+- [x] Introduce provider-qualified `MediaId` values for the implemented track, album, artist, playlist, artwork, route, and persistent playback-queue flows; favorites and caches will adopt them as those features are added.
 - [x] Define deterministic merge, sort, and pagination behavior for current album and track results arriving from multiple providers; cross-provider metadata deduplication remains future work.
 - [x] Update Home, Albums, Search, and player state to consume aggregated results while showing each item's source.
 - [x] Update Artists to consume aggregated results after adding the required provider contract and API endpoints.
@@ -35,6 +35,10 @@ This file tracks implementation work that is planned but not yet complete. Keep 
 - [ ] Add local artwork and audio serving that prevents path traversal and exposes only indexed files.
 - [ ] Test large libraries, Unicode paths, long Windows paths, duplicate files, cue sheets, multi-disc albums, and malformed tags.
 - [x] Complete the first live Albums and dedicated Search page slice.
+- [x] **0.1.5:** Add full album-detail navigation and user-facing pagination while retaining album sorting, filtering, provider attribution, and paged provider discovery.
+- [x] **0.1.5:** Discover versioned OpenSubsonic extensions, expose them through provider summaries, and conservatively gate optional features when support is unknown.
+- [x] **0.1.5:** Aggregate provider-qualified favorite artists, albums, and tracks; add optimistic star/unstar controls with rollback; and gate the feature using the advertised Subsonic API version.
+- [x] **0.1.5:** Add provider-qualified now-playing and completed scrobbling with API-version gating, listened-time thresholds, duplicate protection, and a persistent global preference.
 - [x] Complete the first read-only Playlists page using provider-qualified server playlists and tracks; mixed-source creation and persistence remain future work.
 - [ ] Persist providers securely using the operating-system credential vault.
 - [ ] Integrate the Rust backend lifecycle into the Tauri desktop application.

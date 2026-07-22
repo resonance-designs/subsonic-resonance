@@ -65,9 +65,12 @@ function currentBranch() {
   return branch;
 }
 
-function ensureCleanWorktree() {
+function ensureCleanWorktree(context = 'Working tree has uncommitted changes.') {
   const status = git(['status', '--porcelain']);
-  if (status) throw new Error('Working tree has uncommitted changes. Commit or stash them before releasing.');
+  if (status) {
+    const files = status.split(/\r?\n/).map(line => line.trim()).join(', ');
+    throw new Error(`${context} Changed files: ${files}. Review and commit or stash them before releasing.`);
+  }
 }
 
 function refExists(args) {
@@ -109,6 +112,12 @@ function runReleaseChecks() {
   }
 }
 
+function synchronizeDocumentation() {
+  console.log('Checking generated documentation...');
+  run(process.execPath, ['scripts/sync-docs.js'], { inherit: true });
+  ensureCleanWorktree('Generated documentation is out of date. Run npm run docs:sync and commit the results.');
+}
+
 function main() {
   const version = workspaceVersion();
   const sourceBranch = currentBranch();
@@ -131,8 +140,9 @@ function main() {
   }
 
   ensureCleanWorktree();
+  synchronizeDocumentation();
   runReleaseChecks();
-  ensureCleanWorktree();
+  ensureCleanWorktree('Release checks changed tracked files.');
 
   console.log(`Creating ${releaseBranch} from ${sourceBranch}...`);
   git(['switch', '-c', releaseBranch], { inherit: true });

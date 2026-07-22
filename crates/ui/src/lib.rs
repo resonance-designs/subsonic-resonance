@@ -7,6 +7,9 @@ use wasm_bindgen_futures::spawn_local;
 
 const API_BASE: &str = "http://127.0.0.1:3000/api";
 const QUEUE_STORAGE_KEY: &str = "resonance.playbackQueue.v1";
+const SCROBBLING_STORAGE_KEY: &str = "resonance.scrobblingEnabled.v1";
+const LIBRARY_PAGE_SIZE: usize = 500;
+const ALBUMS_PER_PAGE: usize = 24;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Page {
@@ -14,6 +17,7 @@ enum Page {
     Albums,
     Artists,
     Playlists,
+    Favorites,
     Search,
     Settings,
 }
@@ -37,7 +41,19 @@ struct Provider {
     auth: String,
     server_type: String,
     server_version: String,
+    api_version: String,
     open_subsonic: bool,
+    favorites_supported: bool,
+    scrobbling_supported: bool,
+    capabilities_known: bool,
+    capabilities: Vec<ProviderCapability>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProviderCapability {
+    name: String,
+    versions: Vec<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -122,10 +138,9 @@ struct QueueSnapshot {
     repeat: RepeatMode,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AlbumDetail {
-    #[allow(dead_code)]
     album: Album,
     tracks: Vec<Track>,
 }
@@ -146,6 +161,34 @@ struct AggregateResponse<T> {
     complete: bool,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FavoriteCollection {
+    artists: Vec<Artist>,
+    albums: Vec<Album>,
+    tracks: Vec<Track>,
+    issues: Vec<ProviderIssue>,
+    #[allow(dead_code)]
+    complete: bool,
+}
+
+#[derive(Clone)]
+enum FavoriteItem {
+    Artist(Artist),
+    Album(Album),
+    Track(Track),
+}
+
+impl FavoriteItem {
+    fn id(&self) -> &MediaId {
+        match self {
+            Self::Artist(item) => &item.id,
+            Self::Album(item) => &item.id,
+            Self::Track(item) => &item.id,
+        }
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RegisterProvider {
@@ -163,6 +206,13 @@ enum AuthMethod {
     ApiKey,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScrobbleRequest {
+    submission: bool,
+    time_ms: Option<u64>,
+}
+
 fn api(path: &str) -> String {
     format!("{API_BASE}{path}")
 }
@@ -170,6 +220,66 @@ fn encode(value: &str) -> String {
     js_sys::encode_uri_component(value)
         .as_string()
         .unwrap_or_default()
+}
+
+fn load_scrobbling_enabled() -> bool {
+    web_sys::window()
+        .and_then(|window| window.local_storage().ok().flatten())
+        .and_then(|storage| storage.get_item(SCROBBLING_STORAGE_KEY).ok().flatten())
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(true)
+}
+
+fn persist_scrobbling_enabled(enabled: bool) {
+    if let Some(storage) =
+        web_sys::window().and_then(|window| window.local_storage().ok().flatten())
+    {
+        let _ = storage.set_item(SCROBBLING_STORAGE_KEY, &enabled.to_string());
+    }
+}
+
+fn scrobble_threshold(duration_seconds: f64) -> f64 {
+    if duration_seconds.is_finite() && duration_seconds > 0.0 {
+        (duration_seconds / 2.0).min(240.0)
+    } else {
+        240.0
+    }
+}
+
+fn forward_playback_delta(previous: Option<f64>, current: f64) -> f64 {
+    previous
+        .map(|previous| current - previous)
+        .filter(|delta| delta.is_finite() && *delta > 0.0 && *delta <= 5.0)
+        .unwrap_or(0.0)
+}
+
+fn should_submit_scrobble(listened: f64, duration: f64, already_submitted: bool) -> bool {
+    !already_submitted && listened >= scrobble_threshold(duration)
+}
+
+async fn report_scrobble(track: MediaId, submission: bool, time_ms: u64) -> Result<(), String> {
+    let request = ScrobbleRequest {
+        submission,
+        time_ms: Some(time_ms),
+    };
+    let response = Request::post(&api(&format!(
+        "/library/scrobble/{}/{}",
+        encode(&track.provider_id),
+        encode(&track.item_id)
+    )))
+    .json(&request)
+    .map_err(|error| error.to_string())?
+    .send()
+    .await
+    .map_err(|error| format!("Cannot reach Resonance backend: {error}"))?;
+    if response.ok() {
+        Ok(())
+    } else {
+        Err(response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Scrobble request failed".into()))
+    }
 }
 
 fn stream_url(track: &Track) -> String {
@@ -311,18 +421,43 @@ async fn load_library(
 ) {
     loading.set(true);
     error.set(None);
-    match get_json::<AggregateResponse<Album>>("/library/albums?limit=500").await {
-        Ok(response) => {
-            albums.set(response.items);
-            issues.set(response.issues);
-        }
-        Err(message) => {
-            albums.set(Vec::new());
-            issues.set(Vec::new());
-            error.set(Some(message));
+    let mut loaded_albums = Vec::new();
+    let mut provider_issues = Vec::new();
+    let mut offset = 0_usize;
+    loop {
+        match get_json::<AggregateResponse<Album>>(&format!(
+            "/library/albums?limit={LIBRARY_PAGE_SIZE}&offset={offset}"
+        ))
+        .await
+        {
+            Ok(response) => {
+                let item_count = response.items.len();
+                loaded_albums.extend(response.items);
+                for issue in response.issues {
+                    if !provider_issues.contains(&issue) {
+                        provider_issues.push(issue);
+                    }
+                }
+                if item_count < LIBRARY_PAGE_SIZE {
+                    albums.set(loaded_albums);
+                    issues.set(provider_issues);
+                    break;
+                }
+                offset = offset.saturating_add(item_count);
+            }
+            Err(message) => {
+                albums.set(Vec::new());
+                issues.set(Vec::new());
+                error.set(Some(message));
+                break;
+            }
         }
     }
     loading.set(false);
+}
+
+fn page_count(item_count: usize, page_size: usize) -> usize {
+    item_count.div_ceil(page_size).max(1)
 }
 
 fn cover_url(cover: Option<&MediaId>, size: u32) -> Option<String> {
@@ -351,7 +486,7 @@ fn Nav(active: RwSignal<Page>, providers: RwSignal<Vec<Provider>>) -> impl IntoV
     view! {
         <aside class="sidebar">
             <div class="brand"><img class="brand-mark" src="/img/logo.png" alt=""/><div><small class="letter-stretch"><span>"S"</span><span>"u"</span><span>"b"</span><span>"s"</span><span>"o"</span><span>"n"</span><span>"i"</span><span>"c"</span></small><strong>"Resonance"</strong></div></div>
-            <nav aria-label="Primary navigation">{item(Page::Home,"Home","⌂")}{item(Page::Albums,"Albums","▣")}{item(Page::Artists,"Artists","◉")}{item(Page::Playlists,"Playlists","≡")}{item(Page::Search,"Search","⌕")}{item(Page::Settings,"Settings","⚙")}</nav>
+            <nav aria-label="Primary navigation">{item(Page::Home,"Home","⌂")}{item(Page::Albums,"Albums","▣")}{item(Page::Artists,"Artists","◉")}{item(Page::Playlists,"Playlists","≡")}{item(Page::Favorites,"Favorites","★")}{item(Page::Search,"Search","⌕")}{item(Page::Settings,"Settings","⚙")}</nav>
             <section class="sources"><p class="eyebrow">"SOURCES · ALL ACTIVE"</p><div class="source-list">
                 {move||providers.get().into_iter().map(|p|view!{<div class="source-button"><i class="online"></i><span><b>{p.name}</b><small>{format!("{} · {}",p.server_type,p.server_version)}</small></span></div>}).collect_view()}
                 <Show when=move||providers.get().is_empty()><p class="empty-source">"No connected servers"</p></Show>
@@ -464,6 +599,48 @@ fn SourceFilter(providers: RwSignal<Vec<Provider>>, selected: RwSignal<String>) 
 }
 
 #[component]
+fn FavoriteButton(item: FavoriteItem) -> impl IntoView {
+    let favorites = expect_context::<RwSignal<FavoriteCollection>>();
+    let error = expect_context::<RwSignal<Option<String>>>();
+    let providers = expect_context::<RwSignal<Vec<Provider>>>();
+    let id = item.id().clone();
+    let provider_id = id.provider_id.clone();
+    let item_for_update = item.clone();
+    let is_favorite = Memo::new(move |_| match &item {
+        FavoriteItem::Artist(_) => favorites.get().artists.iter().any(|value| value.id == id),
+        FavoriteItem::Album(_) => favorites.get().albums.iter().any(|value| value.id == id),
+        FavoriteItem::Track(_) => favorites.get().tracks.iter().any(|value| value.id == id),
+    });
+    let supported = Memo::new(move |_| {
+        providers
+            .get()
+            .into_iter()
+            .find(|provider| provider.id == provider_id)
+            .is_some_and(|provider| provider.favorites_supported)
+    });
+    view! {<button type="button" class="favorite-button" class:active=move || is_favorite.get() disabled=move || !supported.get() title=move || if supported.get() {""} else {"Favorites are unavailable for this provider"} aria-label=move || if !supported.get() {"Favorites unavailable"} else if is_favorite.get() {"Remove from favorites"} else {"Add to favorites"} on:click=move |_| {
+        if !supported.get_untracked() { return; }
+        let favorite = !is_favorite.get_untracked();
+        let previous = favorites.get_untracked();
+        favorites.update(|collection| match &item_for_update {
+            FavoriteItem::Artist(item) => { collection.artists.retain(|value| value.id != item.id); if favorite { collection.artists.push(item.clone()); } },
+            FavoriteItem::Album(item) => { collection.albums.retain(|value| value.id != item.id); if favorite { collection.albums.push(item.clone()); } },
+            FavoriteItem::Track(item) => { collection.tracks.retain(|value| value.id != item.id); if favorite { collection.tracks.push(item.clone()); } },
+        });
+        let id = item_for_update.id().clone();
+        spawn_local(async move {
+            let url = api(&format!("/library/favorites/{}/{}/{}", encode(&id.provider_id), encode(&id.kind), encode(&id.item_id)));
+            let result = if favorite { Request::put(&url).send().await } else { Request::delete(&url).send().await };
+            match result {
+                Ok(response) if response.ok() => {}
+                Ok(response) => { favorites.set(previous); error.set(Some(response.text().await.unwrap_or_else(|_| "Could not update favorite".into()))); }
+                Err(message) => { favorites.set(previous); error.set(Some(format!("Could not update favorite: {message}"))); }
+            }
+        });
+    }>{move || if is_favorite.get() {"★"} else {"☆"}}</button>}
+}
+
+#[component]
 fn TrackResults(
     #[prop(into)] items: Signal<Vec<Track>>,
     queue: RwSignal<Vec<Track>>,
@@ -479,8 +656,9 @@ fn TrackResults(
                 {move || items.get().into_iter().enumerate().map(|(idx, track)| {
                     let result_items = items;
                     let playback_track = track.clone();
+                    let favorite_track = track.clone();
                     view! {
-                        <button on:click=move |_| {
+                        <div class="track-row"><button class="track-play" on:click=move |_| {
                             queue.set(result_items.get());
                             current.set(idx);
                             playing.set(true);
@@ -491,7 +669,7 @@ fn TrackResults(
                             <span class="track-name"><b>{track.title}</b><small>{format!("{} · {}", track.artist.unwrap_or_else(|| "Unknown artist".into()), track.source_name)}</small></span>
                             <span class="track-album">{track.album.unwrap_or_default()}</span>
                             <span class="track-time">{format_duration(track.duration_seconds)}</span>
-                        </button>
+                        </button><FavoriteButton item=FavoriteItem::Track(favorite_track)/></div>
                     }
                 }).collect_view()}
             </div>
@@ -513,8 +691,8 @@ fn AlbumsPage(
     let filter = RwSignal::new(String::new());
     let sort = RwSignal::new(String::from("title"));
     let source = RwSignal::new(String::new());
-    let selected = RwSignal::new(None::<MediaId>);
-    let album_tracks = RwSignal::new(Vec::<Track>::new());
+    let page = RwSignal::new(0_usize);
+    let selected_album = RwSignal::new(None::<Album>);
     let visible_albums = move || {
         let needle = filter.get().trim().to_lowercase();
         let mut items = albums.get();
@@ -553,35 +731,99 @@ fn AlbumsPage(
         }
         items
     };
+    Effect::new(move |_| {
+        filter.get();
+        sort.get();
+        source.get();
+        page.set(0);
+    });
 
-    view! {<main class="content library-page">
-        <header class="editorial-head"><div><p class="eyebrow">"UNIFIED LIBRARY"</p><h1>"Albums"</h1><p>"Browse releases from every connected source."</p></div></header>
-        <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings to browse albums."</p></section>}>
-            <div class="library-toolbar">
-                <label><span>"Filter albums"</span><input type="search" placeholder="Title, artist, or source" on:input=move |event| filter.set(event_target_value(&event))/></label>
-                <SourceFilter providers selected=source/>
-                <label><span>"Sort by"</span><select on:change=move |event| sort.set(event_target_value(&event))><option value="title">"Title"</option><option value="artist">"Artist"</option><option value="year">"Newest year"</option><option value="source">"Source"</option></select></label>
-            </div>
-            <Show when=move || loading.get()><p class="library-state">"Loading albums…"</p></Show>
-            <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Could not load albums"</b><p>{message}</p></div>})}</Show>
-            <ProviderNotices issues/>
-            <div class="section-title"><div><p class="eyebrow">"ALL SOURCES"</p><h2>"Releases"</h2></div><span class="track-count">{move || format!("{} SHOWN", visible_albums().len())}</span></div>
-            <Show when=move || !visible_albums().is_empty() fallback=move || view! {<div class="empty-results"><p>"No albums match this filter."</p></div>}>
-                <div class="album-grid">{move || visible_albums().into_iter().map(|album| {
-                    let id = album.id.clone();
-                    let selected_id = id.clone();
-                    view! {<button class="media-card album-card" class:selected=move || selected.get().as_ref() == Some(&selected_id) disabled=move || loading.get() on:click=move |_| {
-                        if loading.get_untracked() {
-                            return;
-                        }
-                        loading.set(true);
-                        selected.set(Some(id.clone()));
-                        spawn_local(load_album_tracks(id.clone(), album_tracks, loading, error));
-                    }><Artwork cover=album.cover_art.clone() title=album.name.clone()/><strong>{album.name}</strong><span>{album.artist.unwrap_or_else(|| "Unknown artist".into())}</span><small>{format!("{}{}", album.source_name, album.year.map(|year| format!(" · {year}")).unwrap_or_default())}</small></button>}
-                }).collect_view()}</div>
-            </Show>
-            <section class="tracks page-tracks"><div class="section-title"><div><p class="eyebrow">"SELECTED ALBUM"</p><h2>"Tracks"</h2></div><span class="track-count">{move || if selected.get().is_some() { format!("{} TRACKS", album_tracks.get().len()) } else { "0 TRACKS".into() }}</span></div><Show when=move || selected.get().is_some() fallback=move || view! {<div class="empty-results"><p>"Select an album to view its tracks."</p></div>}><TrackResults items=album_tracks queue=tracks current playing empty_message="This album did not return any tracks."/></Show></section>
+    view! {
+        <Show
+            when=move || selected_album.get().is_some()
+            fallback=move || view! {<main class="content library-page albums-page">
+                <header class="editorial-head"><div><p class="eyebrow">"UNIFIED LIBRARY"</p><h1>"Albums"</h1><p>"Browse releases from every connected source."</p></div></header>
+                <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings to browse albums."</p></section>}>
+                    <div class="library-toolbar">
+                        <label><span>"Filter albums"</span><input type="search" placeholder="Title, artist, or source" on:input=move |event| filter.set(event_target_value(&event))/></label>
+                        <SourceFilter providers selected=source/>
+                        <label><span>"Sort by"</span><select on:change=move |event| sort.set(event_target_value(&event))><option value="title">"Title"</option><option value="artist">"Artist"</option><option value="year">"Newest year"</option><option value="source">"Source"</option></select></label>
+                    </div>
+                    <Show when=move || loading.get()><p class="library-state">"Loading albums…"</p></Show>
+                    <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Could not load albums"</b><p>{message}</p></div>})}</Show>
+                    <ProviderNotices issues/>
+                    <div class="section-title"><div><p class="eyebrow">"ALL SOURCES"</p><h2>"Releases"</h2></div><span class="track-count">{move || format!("{} ALBUMS", visible_albums().len())}</span></div>
+                    <Show when=move || !visible_albums().is_empty() fallback=move || view! {<div class="empty-results"><p>"No albums match this filter."</p></div>}>
+                        <div class="album-grid">{move || visible_albums().into_iter().skip(page.get() * ALBUMS_PER_PAGE).take(ALBUMS_PER_PAGE).map(|album| {
+                            let selected = album.clone();
+                            view! {<button class="media-card album-card" on:click=move |_| selected_album.set(Some(selected.clone()))><Artwork cover=album.cover_art.clone() title=album.name.clone()/><strong>{album.name}</strong><span>{album.artist.unwrap_or_else(|| "Unknown artist".into())}</span><small>{format!("{}{}", album.source_name, album.year.map(|year| format!(" · {year}")).unwrap_or_default())}</small></button>}
+                        }).collect_view()}</div>
+                        <nav class="library-pagination" aria-label="Album pages">
+                            <button type="button" disabled=move || page.get() == 0 on:click=move |_| page.update(|value| *value = value.saturating_sub(1))>"← Previous"</button>
+                            <span>{move || format!("Page {} of {}", page.get() + 1, page_count(visible_albums().len(), ALBUMS_PER_PAGE))}</span>
+                            <button type="button" disabled=move || page.get() + 1 >= page_count(visible_albums().len(), ALBUMS_PER_PAGE) on:click=move |_| page.update(|value| *value += 1)>"Next →"</button>
+                        </nav>
+                    </Show>
+                </Show>
+            </main>}
+        >
+            {move || selected_album.get().map(|album| view! {<AlbumDetailPage album selected_album queue=tracks current playing/>})}
         </Show>
+    }
+}
+
+#[component]
+fn AlbumDetailPage(
+    album: Album,
+    selected_album: RwSignal<Option<Album>>,
+    queue: RwSignal<Vec<Track>>,
+    current: RwSignal<usize>,
+    playing: RwSignal<bool>,
+) -> impl IntoView {
+    let favorite_album = album.clone();
+    let id = album.id.clone();
+    let title = album.name.clone();
+    let artist = album
+        .artist
+        .clone()
+        .unwrap_or_else(|| "Unknown artist".into());
+    let source = album.source_name.clone();
+    let cover = album.cover_art.clone();
+    let year = album.year;
+    let song_count = album.song_count;
+    let duration = album.duration_seconds;
+    let detail = RwSignal::new(None::<AlbumDetail>);
+    let loading = RwSignal::new(true);
+    let error = RwSignal::new(None::<String>);
+
+    spawn_local(async move {
+        match get_json::<AlbumDetail>(&format!(
+            "/library/albums/{}/{}",
+            encode(&id.provider_id),
+            encode(&id.item_id)
+        ))
+        .await
+        {
+            Ok(album_detail) => detail.set(Some(album_detail)),
+            Err(message) => error.set(Some(message)),
+        }
+        loading.set(false);
+    });
+
+    view! {<main class="content library-page album-detail-page">
+        <button type="button" class="detail-back" on:click=move |_| selected_album.set(None)>"← All albums"</button>
+        <header class="album-detail-head">
+            <Artwork cover title=title.clone() class="album-detail-art"/>
+            <div><p class="eyebrow">"ALBUM · UNIFIED LIBRARY"</p><h1>{title}</h1><p class="album-detail-artist">{artist}</p><p class="album-detail-meta">{format!("{}{}{}{}", source, year.map(|value| format!(" · {value}")).unwrap_or_default(), song_count.map(|value| format!(" · {value} tracks")).unwrap_or_default(), duration.map(|value| format!(" · {}", format_duration(Some(value)))).unwrap_or_default())}</p><FavoriteButton item=FavoriteItem::Album(favorite_album)/></div>
+        </header>
+        <Show when=move || loading.get()><p class="library-state">"Loading album…"</p></Show>
+        <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Could not load this album"</b><p>{message}</p></div>})}</Show>
+        <Show when=move || detail.get().is_some()>{move || detail.get().map(|album_detail| {
+            let track_count = album_detail.tracks.len();
+            let album_name = album_detail.album.name;
+            let album_tracks = RwSignal::new(album_detail.tracks);
+            view! {<section class="tracks page-tracks"><div class="section-title"><div><p class="eyebrow">"TRACK LIST"</p><h2>{album_name}</h2></div><span class="track-count">{format!("{track_count} TRACKS")}</span></div><TrackResults items=album_tracks queue current playing empty_message="This album did not return any tracks."/></section>}
+        })}</Show>
     </main>}
 }
 
@@ -705,6 +947,7 @@ fn ArtistDetailPage(
     current: RwSignal<usize>,
     playing: RwSignal<bool>,
 ) -> impl IntoView {
+    let favorite_artist = artist.clone();
     let artist_id = artist.id.clone();
     let artist_name = artist.name.clone();
     let artist_source = artist.source_name.clone();
@@ -742,7 +985,7 @@ fn ArtistDetailPage(
         <button type="button" class="detail-back" on:click=move |_| selected_artist.set(None)>"← All artists"</button>
         <header class="artist-detail-head">
             <Artwork cover=artist_cover title=artist_name.clone() class="artist-detail-art"/>
-            <div><p class="eyebrow">"ARTIST · UNIFIED LIBRARY"</p><h1>{artist_name}</h1><p>{artist_source}</p></div>
+            <div><p class="eyebrow">"ARTIST · UNIFIED LIBRARY"</p><h1>{artist_name}</h1><p>{artist_source}</p><FavoriteButton item=FavoriteItem::Artist(favorite_artist)/></div>
         </header>
         <Show when=move || loading.get()><p class="library-state">"Loading artist releases…"</p></Show>
         <Show when=move || error.get().is_some()>{move || error.get().map(|message| view! {<div class="library-error"><b>"Could not load this artist"</b><p>{message}</p></div>})}</Show>
@@ -942,15 +1185,46 @@ fn SearchPage(
 }
 
 #[component]
+fn FavoritesPage(
+    providers: RwSignal<Vec<Provider>>,
+    queue: RwSignal<Vec<Track>>,
+    current: RwSignal<usize>,
+    playing: RwSignal<bool>,
+) -> impl IntoView {
+    let favorites = expect_context::<RwSignal<FavoriteCollection>>();
+    view! {<main class="content library-page favorites-page">
+        <header class="editorial-head"><div><p class="eyebrow">"ALL CONNECTED SOURCES"</p><h1>"Favorites"</h1><p>"Starred artists, albums, and tracks from every available provider."</p></div></header>
+        <Show when=move || !providers.get().is_empty() fallback=|| view! {<section class="empty-library"><h2>"Connect a music server"</h2><p>"Add a provider in Settings to browse favorites."</p></section>}>
+            <Show when=move || providers.get().iter().any(|provider| !provider.favorites_supported)><div class="library-error partial"><b>"Favorites are unavailable on some sources"</b><p>{move || providers.get().into_iter().filter(|provider| !provider.favorites_supported).map(|provider| provider.name).collect::<Vec<_>>().join(", ")}</p></div></Show>
+            <Show when=move || !favorites.get().issues.is_empty()>{move || favorites.get().issues.into_iter().map(|issue| view! {<div class="library-error partial"><b>{format!("{} favorites are unavailable", issue.provider_name)}</b><p>{issue.message}</p></div>}).collect_view()}</Show>
+            <div class="section-title"><div><p class="eyebrow">"STARRED ARTISTS"</p><h2>"Artists"</h2></div><span class="track-count">{move || format!("{} ARTISTS", favorites.get().artists.len())}</span></div>
+            <Show when=move || !favorites.get().artists.is_empty() fallback=move || view! {<div class="empty-results"><p>"No favorite artists yet."</p></div>}><div class="artist-grid">{move || favorites.get().artists.into_iter().map(|artist| {let favorite=artist.clone();view!{<article class="media-card artist-card"><Artwork cover=artist.cover_art title=artist.name.clone()/><strong>{artist.name}</strong><small>{artist.source_name}</small><FavoriteButton item=FavoriteItem::Artist(favorite)/></article>}}).collect_view()}</div></Show>
+            <div class="section-title"><div><p class="eyebrow">"STARRED RELEASES"</p><h2>"Albums"</h2></div><span class="track-count">{move || format!("{} ALBUMS", favorites.get().albums.len())}</span></div>
+            <Show when=move || !favorites.get().albums.is_empty() fallback=move || view! {<div class="empty-results"><p>"No favorite albums yet."</p></div>}><div class="album-grid">{move || favorites.get().albums.into_iter().map(|album| {let favorite=album.clone();view!{<article class="media-card album-card"><Artwork cover=album.cover_art title=album.name.clone()/><strong>{album.name}</strong><span>{album.artist.unwrap_or_else(||"Unknown artist".into())}</span><small>{album.source_name}</small><FavoriteButton item=FavoriteItem::Album(favorite)/></article>}}).collect_view()}</div></Show>
+            <section class="tracks page-tracks"><div class="section-title"><div><p class="eyebrow">"STARRED TRACKS"</p><h2>"Tracks"</h2></div><span class="track-count">{move || format!("{} TRACKS", favorites.get().tracks.len())}</span></div><TrackResults items=Signal::derive(move || favorites.get().tracks) queue current playing empty_message="No favorite tracks yet."/></section>
+        </Show>
+    </main>}
+}
+
+#[component]
 fn Settings(providers: RwSignal<Vec<Provider>>) -> impl IntoView {
+    let scrobbling = expect_context::<RwSignal<bool>>();
     let connections = RwSignal::new(true);
     let dialog = RwSignal::new(false);
     let action_error = RwSignal::new(None::<String>);
     view! {<main class="content settings"><header class="editorial-head"><div><p class="eyebrow">"SYSTEM & SOURCES"</p><h1>"Settings"</h1><p>"Every connection is available throughout Resonance."</p></div></header><div class="settings-tabs" role="tablist"><button role="tab" aria-selected=move||(!connections.get()).to_string() class:active=move||!connections.get() on:click=move |_|connections.set(false)>"General"</button><button role="tab" aria-selected=move||connections.get().to_string() class:active=move||connections.get() on:click=move |_|connections.set(true)>"Connections"</button></div>
-        <Show when=move||connections.get() fallback=||view!{<section class="general"><div class="preference"><div><b>"Streaming quality"</b><small>"Server transcoding preferences are coming next."</small></div><select><option>"Original"</option></select></div></section>}>
+        <Show when=move||connections.get() fallback=move ||view!{<section class="general"><div class="preference"><div><b>"Streaming quality"</b><small>"Server transcoding preferences are coming next."</small></div><select><option>"Original"</option></select></div><div class="preference"><div><b>"Scrobbling"</b><small>"Report now-playing and completed tracks to compatible providers."</small></div><label class="toggle-preference"><input type="checkbox" prop:checked=move || scrobbling.get() on:change=move |event| {let enabled=event_target_checked(&event);scrobbling.set(enabled);persist_scrobbling_enabled(enabled);}/><span>{move || if scrobbling.get() {"Enabled"} else {"Disabled"}}</span></label></div></section>}>
             <section class="connections"><div class="connections-head"><div><p class="eyebrow">"LIVE PROVIDERS"</p><h2>"Connections"</h2><p>"All connected providers participate in the unified library."</p></div><button class="primary" on:click=move |_|dialog.set(true)>"＋ Add Provider"</button></div>
             <Show when=move||action_error.get().is_some()>{move||action_error.get().map(|e|view!{<div class="library-error"><p>{e}</p></div>})}</Show>
-            <div class="provider-list">{move||providers.get().into_iter().map(|p|{let remove_id=p.id.clone();view!{<article class="active"><span class="signal"><i></i><i></i><i></i></span><div class="provider-identity"><b>{p.name}</b><small>{p.url}</small></div><dl><div><dt>"AUTH"</dt><dd>{p.auth}</dd></div><div><dt>"SERVER"</dt><dd class="connected">{p.server_type}</dd></div></dl><span class="connected">"Available everywhere"</span><button class="remove" on:click=move |_|{let id=remove_id.clone();spawn_local(async move{match Request::delete(&api(&format!("/providers/{}",encode(&id)))).send().await{Ok(response) if response.ok()=>providers.update(|items|items.retain(|x|x.id!=id)),Ok(response)=>action_error.set(Some(response.text().await.unwrap_or_else(|_|"Could not remove provider".into()))),Err(e)=>action_error.set(Some(e.to_string()))}});}>"Remove"</button></article>}}).collect_view()}</div>
+            <div class="provider-list">{move||providers.get().into_iter().map(|p|{
+                let remove_id=p.id.clone();
+                let capabilities_known=p.capabilities_known;
+                let capability_count=p.capabilities.len();
+                let capabilities=p.capabilities.clone();
+                let capability_state=if capabilities_known {format!("{capability_count} OpenSubsonic extensions detected")} else if p.open_subsonic {"Extension discovery unavailable; optional features remain disabled".into()} else {"Legacy Subsonic compatibility; optional features remain disabled".into()};
+                let annotation_state=format!("Favorites: {} · Scrobbling: {}",if p.favorites_supported {"available"} else {"unavailable"},if p.scrobbling_supported {"available"} else {"unavailable"});
+                view!{<article class="active"><span class="signal"><i></i><i></i><i></i></span><div class="provider-identity"><b>{p.name}</b><small>{p.url}</small></div><dl><div><dt>"AUTH"</dt><dd>{p.auth}</dd></div><div><dt>"SERVER"</dt><dd class="connected">{format!("{} {}",p.server_type,p.server_version)}</dd></div><div><dt>"API"</dt><dd>{p.api_version}</dd></div></dl><span class="connected provider-availability">"Available everywhere"</span><button class="remove" on:click=move |_|{let id=remove_id.clone();spawn_local(async move{match Request::delete(&api(&format!("/providers/{}",encode(&id)))).send().await{Ok(response) if response.ok()=>providers.update(|items|items.retain(|x|x.id!=id)),Ok(response)=>action_error.set(Some(response.text().await.unwrap_or_else(|_|"Could not remove provider".into()))),Err(e)=>action_error.set(Some(e.to_string()))}});}>"Remove"</button><div class="provider-capabilities"><span class:known=p.favorites_supported||p.scrobbling_supported>{annotation_state}</span><span class:known=capabilities_known>{capability_state}</span><Show when=move||capabilities_known><ul aria-label="Supported OpenSubsonic extensions">{capabilities.clone().into_iter().map(|capability|view!{<li title=format!("Supported versions: {}",capability.versions.iter().map(u32::to_string).collect::<Vec<_>>().join(", "))>{capability.name}</li>}).collect_view()}</ul></Show></div></article>}
+            }).collect_view()}</div>
             <Show when=move||providers.get().is_empty()><div class="empty-library"><h2>"No providers connected"</h2><p>"Add your first Subsonic server above."</p></div></Show>
             <p class="prototype-note">"Web credentials are held only in backend memory and disappear when the backend stops."</p></section>
         </Show><ProviderDialog open=dialog providers error=action_error/>
@@ -1063,10 +1337,19 @@ fn Player(
     shuffle: RwSignal<bool>,
     repeat: RwSignal<RepeatMode>,
 ) -> impl IntoView {
+    let providers = expect_context::<RwSignal<Vec<Provider>>>();
+    let scrobbling = expect_context::<RwSignal<bool>>();
+    let scrobble_error = expect_context::<RwSignal<Option<String>>>();
     let track = move || tracks.get().get(current.get()).cloned();
     let queue_open = RwSignal::new(false);
     let duration = RwSignal::new(0.0_f64);
     let persisted_second = RwSignal::new(position.get_untracked().floor().max(0.0) as u64);
+    let scrobble_track = RwSignal::new(None::<MediaId>);
+    let scrobble_started_ms = RwSignal::new(js_sys::Date::now().max(0.0) as u64);
+    let now_playing_sent = RwSignal::new(false);
+    let submission_sent = RwSignal::new(false);
+    let listened_seconds = RwSignal::new(0.0_f64);
+    let last_media_position = RwSignal::new(None::<f64>);
     let audio_ref = NodeRef::<leptos::html::Audio>::new();
 
     Effect::new(move |_| {
@@ -1091,6 +1374,21 @@ fn Player(
             } else {
                 audio.pause().ok();
             }
+        }
+    });
+
+    Effect::new(move |_| {
+        let selected = tracks
+            .get()
+            .get(current.get())
+            .map(|track| track.id.clone());
+        if scrobble_track.get_untracked() != selected {
+            scrobble_track.set(selected);
+            scrobble_started_ms.set(js_sys::Date::now().max(0.0) as u64);
+            now_playing_sent.set(false);
+            submission_sent.set(false);
+            listened_seconds.set(0.0);
+            last_media_position.set(None);
         }
     });
 
@@ -1164,6 +1462,21 @@ fn Player(
                 on:timeupdate=move |event| {
                     let seconds = event_target::<web_sys::HtmlAudioElement>(&event).current_time();
                     position.set(seconds);
+                    let previous = last_media_position.get_untracked();
+                    last_media_position.set(Some(seconds));
+                    if playing.get_untracked() {
+                        listened_seconds.update(|total| *total += forward_playback_delta(previous, seconds));
+                        if scrobbling.get_untracked() && should_submit_scrobble(listened_seconds.get_untracked(), duration.get_untracked(), submission_sent.get_untracked()) {
+                            if let Some(track) = tracks.get_untracked().get(current.get_untracked()).cloned() {
+                                let supported = providers.get_untracked().into_iter().find(|provider| provider.id == track.id.provider_id).is_some_and(|provider| provider.scrobbling_supported);
+                                if supported {
+                                    submission_sent.set(true);
+                                    let started_ms = scrobble_started_ms.get_untracked();
+                                    spawn_local(async move { if let Err(message) = report_scrobble(track.id, true, started_ms).await { scrobble_error.set(Some(format!("Scrobbling failed: {message}"))); } });
+                                }
+                            }
+                        }
+                    }
                     let whole_seconds = seconds.floor().max(0.0) as u64;
                     if whole_seconds / 5 != persisted_second.get_untracked() / 5 {
                         persisted_second.set(whole_seconds);
@@ -1175,7 +1488,20 @@ fn Player(
                     }
                 }
                 on:durationchange=move |event| duration.set(event_target::<web_sys::HtmlAudioElement>(&event).duration())
-                on:play=move |_| playing.set(true)
+                on:playing=move |_| {
+                    playing.set(true);
+                    last_media_position.set(Some(position.get_untracked()));
+                    if scrobbling.get_untracked() && !now_playing_sent.get_untracked() {
+                        if let Some(track) = tracks.get_untracked().get(current.get_untracked()).cloned() {
+                            let supported = providers.get_untracked().into_iter().find(|provider| provider.id == track.id.provider_id).is_some_and(|provider| provider.scrobbling_supported);
+                            if supported {
+                                now_playing_sent.set(true);
+                                let started_ms = scrobble_started_ms.get_untracked();
+                                spawn_local(async move { if let Err(message) = report_scrobble(track.id, false, started_ms).await { scrobble_error.set(Some(format!("Now-playing report failed: {message}"))); } });
+                            }
+                        }
+                    }
+                }
                 on:pause=move |event| {
                     let audio = event_target::<web_sys::HtmlAudioElement>(&event);
                     if audio.ready_state() == 0 { return; }
@@ -1188,6 +1514,21 @@ fn Player(
                     );
                 }
                 on:ended=move |event| {
+        if scrobbling.get_untracked() && !submission_sent.get_untracked() {
+            if let Some(track) = tracks.get_untracked().get(current.get_untracked()).cloned() {
+                let supported = providers.get_untracked().into_iter().find(|provider| provider.id == track.id.provider_id).is_some_and(|provider| provider.scrobbling_supported);
+                if supported {
+                    submission_sent.set(true);
+                    let started_ms = scrobble_started_ms.get_untracked();
+                    spawn_local(async move { if let Err(message) = report_scrobble(track.id, true, started_ms).await { scrobble_error.set(Some(format!("Scrobbling failed: {message}"))); } });
+                }
+            }
+        }
+        now_playing_sent.set(false);
+        submission_sent.set(false);
+        listened_seconds.set(0.0);
+        last_media_position.set(None);
+        scrobble_started_ms.set(js_sys::Date::now().max(0.0) as u64);
         if repeat.get_untracked() == RepeatMode::One {
             let audio = event_target::<web_sys::HtmlAudioElement>(&event);
             audio.set_current_time(0.0);
@@ -1276,6 +1617,12 @@ pub fn App() -> impl IntoView {
     let loading = RwSignal::new(false);
     let issues = RwSignal::new(Vec::<ProviderIssue>::new());
     let error = RwSignal::new(None::<String>);
+    let favorites = RwSignal::new(FavoriteCollection::default());
+    let scrobbling = RwSignal::new(load_scrobbling_enabled());
+    provide_context(providers);
+    provide_context(favorites);
+    provide_context(error);
+    provide_context(scrobbling);
     let active_track_id = RwSignal::new(
         tracks
             .get_untracked()
@@ -1329,11 +1676,18 @@ pub fn App() -> impl IntoView {
         if provider_count == 0 {
             albums.set(Vec::new());
             issues.set(Vec::new());
+            favorites.set(FavoriteCollection::default());
             return;
         }
         spawn_local(load_library(albums, loading, issues, error));
+        spawn_local(async move {
+            match get_json::<FavoriteCollection>("/library/favorites").await {
+                Ok(items) => favorites.set(items),
+                Err(message) => error.set(Some(message)),
+            }
+        });
     });
-    view! {<div class="app"><Nav active providers/><div class="view">{move||match active.get(){Page::Home=>view!{<Home providers albums queue=tracks current playing loading issues error/>}.into_any(),Page::Albums=>view!{<AlbumsPage providers albums tracks current playing loading issues error/>}.into_any(),Page::Artists=>view!{<ArtistsPage providers queue=tracks current playing/>}.into_any(),Page::Playlists=>view!{<PlaylistsPage providers queue=tracks current playing/>}.into_any(),Page::Search=>view!{<SearchPage providers queue=tracks current playing/>}.into_any(),Page::Settings=>view!{<Settings providers/>}.into_any()}}</div><nav class="mobile-nav">{[(Page::Home,"⌂","Home"),(Page::Albums,"▣","Albums"),(Page::Search,"⌕","Search"),(Page::Settings,"⚙","Settings")].into_iter().map(|(p,g,l)|view!{<button class:active=move||active.get()==p on:click=move |_|active.set(p)><span>{g}</span>{l}</button>}).collect_view()}</nav><Player tracks current playing position volume muted shuffle repeat/></div>}
+    view! {<div class="app"><Nav active providers/><div class="view">{move||match active.get(){Page::Home=>view!{<Home providers albums queue=tracks current playing loading issues error/>}.into_any(),Page::Albums=>view!{<AlbumsPage providers albums tracks current playing loading issues error/>}.into_any(),Page::Artists=>view!{<ArtistsPage providers queue=tracks current playing/>}.into_any(),Page::Playlists=>view!{<PlaylistsPage providers queue=tracks current playing/>}.into_any(),Page::Favorites=>view!{<FavoritesPage providers queue=tracks current playing/>}.into_any(),Page::Search=>view!{<SearchPage providers queue=tracks current playing/>}.into_any(),Page::Settings=>view!{<Settings providers/>}.into_any()}}</div><nav class="mobile-nav">{[(Page::Home,"⌂","Home"),(Page::Albums,"▣","Albums"),(Page::Favorites,"★","Favorites"),(Page::Search,"⌕","Search"),(Page::Settings,"⚙","Settings")].into_iter().map(|(p,g,l)|view!{<button class:active=move||active.get()==p on:click=move |_|active.set(p)><span>{g}</span>{l}</button>}).collect_view()}</nav><Player tracks current playing position volume muted shuffle repeat/></div>}
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
@@ -1345,8 +1699,33 @@ pub fn main() {
 #[cfg(test)]
 mod tests {
     use super::{
-        next_queue_index, normalized_position, normalized_volume, QueueSnapshot, RepeatMode,
+        forward_playback_delta, next_queue_index, normalized_position, normalized_volume,
+        page_count, scrobble_threshold, should_submit_scrobble, QueueSnapshot, RepeatMode,
     };
+
+    #[test]
+    fn scrobble_threshold_is_half_the_track_or_four_minutes() {
+        assert_eq!(scrobble_threshold(180.0), 90.0);
+        assert_eq!(scrobble_threshold(600.0), 240.0);
+        assert_eq!(scrobble_threshold(f64::NAN), 240.0);
+    }
+
+    #[test]
+    fn scrobble_progress_ignores_seeks_and_duplicate_submissions() {
+        assert_eq!(forward_playback_delta(Some(10.0), 11.5), 1.5);
+        assert_eq!(forward_playback_delta(Some(10.0), 100.0), 0.0);
+        assert_eq!(forward_playback_delta(Some(100.0), 10.0), 0.0);
+        assert!(should_submit_scrobble(90.0, 180.0, false));
+        assert!(!should_submit_scrobble(90.0, 180.0, true));
+    }
+
+    #[test]
+    fn album_page_count_handles_empty_and_partial_pages() {
+        assert_eq!(page_count(0, 24), 1);
+        assert_eq!(page_count(24, 24), 1);
+        assert_eq!(page_count(25, 24), 2);
+        assert_eq!(page_count(81, 24), 4);
+    }
 
     #[test]
     fn queue_navigation_stops_or_wraps_at_the_boundary() {
