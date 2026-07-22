@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Corrected the roadmap to distinguish completed persistent queue and provider-qualified media identity work from planned native media controls.
 - Distinguished each provider’s server version from its supported Subsonic API version in provider summaries.
 - Renamed every Rust package, dependency, import, executable reference, and launcher command to the full `subsonic-resonance-*` project namespace.
+- Moved generated-document drift detection ahead of expensive release checks and made release failures identify the changed files and required remediation.
 
 ### Fixed
 
